@@ -1,0 +1,226 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/context_service.dart';
+
+/// Model for managing user preferences with persistent storage
+///
+/// Handles all user settings including:
+/// - Activity preferences (indoor/outdoor/hybrid)
+/// - Mood and energy levels
+/// - Time of day preferences
+/// - Theme settings (dark mode, color themes)
+/// - Haptic feedback preferences
+/// - Favorite activities management
+///
+/// All preferences are automatically persisted to SharedPreferences.
+class PreferencesModel extends ChangeNotifier {
+  final SharedPreferences _prefs;
+
+  /// User's preferred activity type (Indoor, Outdoor, or Hybrid)
+  String? activityPreference;
+
+  /// User's current mood selection
+  String? mood;
+
+  /// User's energy level from 1.0 (very low) to 5.0 (very high)
+  double energyLevel = 3.0;
+
+  /// User's preferred time of day for activities
+  String? timeOfDay;
+
+  /// Whether to automatically detect time of day based on device clock
+  bool autoDetectTime = true;
+
+  /// Social context for activities (Solo, Partner, Small Group, Large Group)
+  String? socialContext;
+
+  /// Duration preference for activities (Quick, Medium, Half Day, Full Day)
+  String? duration;
+
+  /// Whether dark mode is enabled (only used if useSystemTheme is false)
+  bool useDarkMode = false;
+
+  /// Whether to follow system theme settings
+  bool useSystemTheme = true;
+
+  /// Whether haptic feedback is enabled for wheel interactions
+  bool enableHaptics = true;
+
+  /// Selected color theme for the wheel (rainbow, pastels, etc.)
+  String colorTheme = 'rainbow';
+
+  /// List of activities marked as favorites by the user
+  List<String> favoriteActivities = [];
+
+  /// Available activity type options
+  final List<String> activityOptions = ['Indoor', 'Outdoor', 'Hybrid'];
+
+  /// Available mood options
+  final List<String> moodOptions = ['Relaxed', 'Productive', 'Creative', 'Social'];
+
+  /// Available time of day options
+  final List<String> timeOptions = ['Morning', 'Afternoon', 'Evening', 'Night'];
+
+  /// Available social context options
+  final List<String> socialOptions = ['Solo', 'Partner', 'Small Group', 'Large Group'];
+
+  /// Available duration options
+  final List<String> durationOptions = ['Quick (15 min)', 'Medium (1 hr)', 'Half Day', 'Full Day'];
+
+  /// Available color theme options for the wheel
+  final List<String> themeOptions = ['Rainbow', 'Pastels', 'Monochrome', 'Ocean', 'Sunset'];
+
+  PreferencesModel(this._prefs);
+
+  /// Get the effective time of day (auto-detected or manually selected)
+  ///
+  /// Returns the auto-detected time if autoDetectTime is enabled,
+  /// otherwise returns the manually selected timeOfDay value.
+  String get effectiveTimeOfDay {
+    if (autoDetectTime) {
+      return ContextService.getCurrentTimeOfDay();
+    }
+    return timeOfDay ?? ContextService.getCurrentTimeOfDay();
+  }
+
+  /// Load all user preferences from SharedPreferences
+  ///
+  /// Automatically migrates deprecated mood values (e.g., 'Energetic' is reset).
+  /// Notifies listeners after loading is complete.
+  Future<void> loadPreferences() async {
+    activityPreference = _prefs.getString('activityPreference');
+    mood = _prefs.getString('mood');
+    // If current mood is 'Energetic', reset it since we're removing that option
+    if (mood == 'Energetic') {
+      mood = null;
+    }
+    energyLevel = _prefs.getDouble('energyLevel') ?? 3.0;
+    timeOfDay = _prefs.getString('timeOfDay');
+    autoDetectTime = _prefs.getBool('autoDetectTime') ?? true;
+    socialContext = _prefs.getString('socialContext');
+    duration = _prefs.getString('duration');
+    useDarkMode = _prefs.getBool('useDarkMode') ?? false;
+    useSystemTheme = _prefs.getBool('useSystemTheme') ?? true;
+    enableHaptics = _prefs.getBool('enableHaptics') ?? true;
+    colorTheme = _prefs.getString('colorTheme') ?? 'rainbow';
+    favoriteActivities = _prefs.getStringList('favoriteActivities') ?? [];
+    notifyListeners();
+  }
+  
+  /// Save all current preferences to SharedPreferences
+  ///
+  /// Persists all non-null preference values to device storage.
+  Future<void> savePreferences() async {
+    if (activityPreference != null) {
+      await _prefs.setString('activityPreference', activityPreference!);
+    }
+    if (mood != null) {
+      await _prefs.setString('mood', mood!);
+    }
+    await _prefs.setDouble('energyLevel', energyLevel);
+    if (timeOfDay != null) {
+      await _prefs.setString('timeOfDay', timeOfDay!);
+    }
+    await _prefs.setBool('autoDetectTime', autoDetectTime);
+    if (socialContext != null) {
+      await _prefs.setString('socialContext', socialContext!);
+    }
+    if (duration != null) {
+      await _prefs.setString('duration', duration!);
+    }
+    await _prefs.setBool('useDarkMode', useDarkMode);
+    await _prefs.setBool('useSystemTheme', useSystemTheme);
+    await _prefs.setBool('enableHaptics', enableHaptics);
+    await _prefs.setString('colorTheme', colorTheme);
+    await _prefs.setStringList('favoriteActivities', favoriteActivities);
+  }
+  
+  /// Update a single preference by key and automatically save
+  ///
+  /// Accepts a [key] matching the preference name and a [value] of appropriate type.
+  /// Automatically saves to SharedPreferences and notifies listeners.
+  void updatePreference(String key, dynamic value) {
+    switch (key) {
+      case 'activityPreference':
+        activityPreference = value;
+        break;
+      case 'mood':
+        mood = value;
+        break;
+      case 'energyLevel':
+        energyLevel = value;
+        break;
+      case 'timeOfDay':
+        timeOfDay = value;
+        break;
+      case 'autoDetectTime':
+        autoDetectTime = value;
+        break;
+      case 'socialContext':
+        socialContext = value;
+        break;
+      case 'duration':
+        duration = value;
+        break;
+      case 'useDarkMode':
+        useDarkMode = value;
+        break;
+      case 'useSystemTheme':
+        useSystemTheme = value;
+        break;
+      case 'enableHaptics':
+        enableHaptics = value;
+        break;
+      case 'colorTheme':
+        colorTheme = value;
+        break;
+    }
+    savePreferences();
+    notifyListeners();
+  }
+  
+  /// Toggle an activity's favorite status
+  ///
+  /// Adds the activity to favorites if not present, removes it if already favorited.
+  /// Automatically saves and notifies listeners.
+  void toggleFavorite(String activity) {
+    if (favoriteActivities.contains(activity)) {
+      favoriteActivities.remove(activity);
+    } else {
+      favoriteActivities.add(activity);
+    }
+    savePreferences();
+    notifyListeners();
+  }
+
+  /// Check if an activity is in the favorites list
+  ///
+  /// Returns true if the activity is favorited, false otherwise.
+  bool isFavorite(String activity) {
+    return favoriteActivities.contains(activity);
+  }
+
+  /// Reset questionnaire preferences to default values
+  ///
+  /// Clears activity preference, mood, and time of day.
+  /// Resets energy level to 3.0.
+  /// Theme settings and favorites are not affected.
+  void resetPreferences() {
+    activityPreference = null;
+    mood = null;
+    energyLevel = 3.0;
+    timeOfDay = null;
+    savePreferences();
+    notifyListeners();
+  }
+
+  /// Check if all required preferences for wheel generation are set
+  ///
+  /// Returns true if activity preference and mood are selected.
+  /// Time of day is optional when autoDetectTime is enabled.
+  bool get arePreferencesComplete {
+    return activityPreference != null &&
+           mood != null &&
+           (autoDetectTime || timeOfDay != null);
+  }
+}
