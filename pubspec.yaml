@@ -31,14 +31,9 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icon/app_icon.png"
-  adaptive_icon_background: "#6750A4"  # Material 3 primary purple
-  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
-  web:
-    generate: true
-    image_path: "assets/icon/app_icon.png"
-  windows:
-    generate: true
-    image_path: "assets/icon/app_icon.png"
+  # For Android adaptive icons, uses the same image with a purple background
+  adaptive_icon_background: "#6750A4"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
 
 flutter:
   uses-material-design: true
