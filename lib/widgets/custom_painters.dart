@@ -7,14 +7,18 @@ class EnhancedWheelPainter extends CustomPainter {
   final List<String> suggestions;
   final int? selectedSegment;
   final List<Color> colors;
-  final IconData Function(String) getIcon;
-  
+
+  /// Icons parallel to [suggestions]. Pre-computed by the caller so `paint`
+  /// does not have to call into a provider or resolver on every frame.
+  final List<IconData> icons;
+
   EnhancedWheelPainter({
     required this.suggestions,
     this.selectedSegment,
     required this.colors,
-    required this.getIcon,
-  });
+    required this.icons,
+  }) : assert(icons.length == suggestions.length,
+            'icons must be parallel to suggestions');
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -94,8 +98,7 @@ class EnhancedWheelPainter extends CustomPainter {
       );
 
       // Get suggestion and icon
-      String suggestion = suggestions[i];
-      IconData iconData = getIcon(suggestion);
+      IconData iconData = icons[i];
       
       // Calculate icon position and angle - moved further out to center in segment
       double textAngle = segmentStart + sweepAngle / 2;
@@ -150,10 +153,11 @@ class EnhancedWheelPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(EnhancedWheelPainter oldDelegate) => 
+  bool shouldRepaint(EnhancedWheelPainter oldDelegate) =>
       oldDelegate.selectedSegment != selectedSegment ||
       oldDelegate.suggestions != suggestions ||
-      oldDelegate.colors != colors;
+      oldDelegate.colors != colors ||
+      oldDelegate.icons != icons;
 }
 
 /// Enhanced pointer painter with better styling

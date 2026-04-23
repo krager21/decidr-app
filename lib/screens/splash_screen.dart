@@ -31,7 +31,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     
     // Start animation and navigate after it completes
     _controller.forward().then((_) {
+      if (!mounted) return;
       Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => const WelcomePage(),

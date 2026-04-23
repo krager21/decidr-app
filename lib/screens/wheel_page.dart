@@ -11,6 +11,7 @@ import '../services/weather_service.dart';
 import '../widgets/custom_painters.dart';
 import '../utils/decidr_theme.dart';
 import '../utils/constants.dart';
+import '../utils/wheel_math.dart';
 import '../screens/welcome_page.dart';
 
 /// Enhanced wheel page with improved visualization
@@ -24,12 +25,18 @@ class WheelPage extends StatefulWidget {
 class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
-  double _currentRotation = 0.0;
+
+  /// Current wheel rotation in radians. Exposed as a [ValueNotifier] so the
+  /// rotating subtree can rebuild on each frame via [ValueListenableBuilder]
+  /// without forcing a rebuild of the whole Scaffold.
+  final ValueNotifier<double> _rotation = ValueNotifier<double>(0.0);
+
   bool _isSpinning = false;
   int? _selectedSegment;
   List<String> _suggestions = [];
+  List<IconData> _suggestionIcons = const [];
   String? _selectedSuggestion;
-  
+
   // For manual spinning with gesture
   double _startDragPosition = 0.0;
   double _previousRotation = 0.0;
@@ -49,17 +56,15 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
     // Handle the animation completion
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
+        _rotation.value = _animation.value;
         setState(() {
-          _currentRotation = _animation.value;
           _isSpinning = false;
 
           if (_suggestions.isNotEmpty) {
-            // Calculate the winning segment
-            int n = _suggestions.length;
-            double segmentAngle = 2 * pi / n;
-            double normalizedRotation = _currentRotation % (2 * pi);
-            int rawIndex = (normalizedRotation / segmentAngle).floor() % n;
-            _selectedSegment = (n - rawIndex - 1) % n;
+            _selectedSegment = WheelMath.selectedSegment(
+              _rotation.value,
+              _suggestions.length,
+            );
             _selectedSuggestion = _suggestions[_selectedSegment!];
 
             // Trigger haptic feedback for better user experience
@@ -91,6 +96,7 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
   
   // Load suggestions based on user preferences
   void _loadSuggestions() {
+    if (!mounted) return;
     final preferencesModel = Provider.of<PreferencesModel>(context, listen: false);
     final suggestionsRepo = Provider.of<SuggestionsRepository>(context, listen: false);
     final weatherService = Provider.of<WeatherService>(context, listen: false);
@@ -120,6 +126,12 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
       );
     }
 
+    // Resolve icons once per suggestions list so the painter doesn't have
+    // to call back into the provider for every segment on every frame.
+    _suggestionIcons = _suggestions
+        .map(suggestionsRepo.getIconForSuggestion)
+        .toList(growable: false);
+
     setState(() {});
   }
   
@@ -146,6 +158,7 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
   @override
   void dispose() {
     _controller.dispose();
+    _rotation.dispose();
     super.dispose();
   }
   
@@ -186,55 +199,55 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
     
     // Configure animation with custom curve for realistic physics
     _animation = Tween<double>(
-      begin: _currentRotation,
-      end: _currentRotation + finalRotation,
+      begin: _rotation.value,
+      end: _rotation.value + finalRotation,
     ).animate(
       CurvedAnimation(
         parent: _controller,
         curve: Curves.easeOutExpo, // More realistic spin-down
       ),
     )..addListener(() {
-        setState(() {
-          _currentRotation = _animation.value;
-        });
+        // Update the notifier only — avoids rebuilding the whole Scaffold
+        // every animation frame.
+        _rotation.value = _animation.value;
       });
-    
+
     // Start the spin
     _controller.reset();
     _controller.forward();
   }
-  
+
   // Handle pan start for manual spinning
   void _handlePanStart(DragStartDetails details) {
     if (_isSpinning) return;
-    
-    // Calculate the center of the wheel
-    final RenderBox box = context.findRenderObject() as RenderBox;
+
+    final box = context.findRenderObject();
+    if (box is! RenderBox) return;
     final center = box.size.center(Offset.zero);
     final touchPosition = box.globalToLocal(details.globalPosition);
-    
+
     // Calculate the angle of touch relative to center
-    _startDragPosition = _getAngleFromPosition(center, touchPosition);
-    _previousRotation = _currentRotation;
+    _startDragPosition = WheelMath.angleFromPosition(center, touchPosition);
+    _previousRotation = _rotation.value;
     _lastDragTime = DateTime.now();
   }
-  
+
   // Handle pan update for manual spinning
   void _handlePanUpdate(DragUpdateDetails details) {
     if (_isSpinning) return;
-    
-    final RenderBox box = context.findRenderObject() as RenderBox;
+
+    final box = context.findRenderObject();
+    if (box is! RenderBox) return;
     final center = box.size.center(Offset.zero);
     final touchPosition = box.globalToLocal(details.globalPosition);
-    
+
     // Calculate new angle and update rotation
-    final currentAngle = _getAngleFromPosition(center, touchPosition);
+    final currentAngle = WheelMath.angleFromPosition(center, touchPosition);
     final angleDifference = currentAngle - _startDragPosition;
-    
-    setState(() {
-      _currentRotation = _previousRotation + angleDifference;
-    });
-    
+
+    // Notifier update avoids rebuilding the full Scaffold per drag event.
+    _rotation.value = _previousRotation + angleDifference;
+
     // Calculate velocity for momentum
     final now = DateTime.now();
     final timeDiff = now.difference(_lastDragTime!).inMilliseconds;
@@ -273,65 +286,48 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
     _controller.duration = spinDuration;
     
     _animation = Tween<double>(
-      begin: _currentRotation,
-      end: _currentRotation + (velocity > 0 ? spinAmount : -spinAmount),
+      begin: _rotation.value,
+      end: _rotation.value + (velocity > 0 ? spinAmount : -spinAmount),
     ).animate(
       CurvedAnimation(
         parent: _controller,
         curve: Curves.easeOutCubic,
       ),
     )..addListener(() {
-        setState(() {
-          _currentRotation = _animation.value;
-        });
+        _rotation.value = _animation.value;
       });
-    
+
     // Start the spin with momentum
     _controller.reset();
     _controller.forward();
   }
-  
+
   // Snap the wheel to the nearest segment
   void _snapToNearestSegment() {
     if (_suggestions.isEmpty) return;
-    
-    int n = _suggestions.length;
-    double segmentAngle = 2 * pi / n;
-    
-    // Calculate nearest segment
-    double normalizedRotation = _currentRotation % (2 * pi);
-    int nearestSegment = (normalizedRotation / segmentAngle).round();
-    double snapRotation = nearestSegment * segmentAngle;
-    
+
+    final start = _rotation.value;
+    final delta = WheelMath.snapDelta(start, _suggestions.length);
+
     // Small animation to snap to nearest segment
     _controller.duration = WheelConstants.snapDuration;
-    
+
     _animation = Tween<double>(
-      begin: _currentRotation,
-      end: _currentRotation + (snapRotation - normalizedRotation),
+      begin: start,
+      end: start + delta,
     ).animate(
       CurvedAnimation(
         parent: _controller,
         curve: Curves.easeOutQuad,
       ),
     )..addListener(() {
-        setState(() {
-          _currentRotation = _animation.value;
-        });
+        _rotation.value = _animation.value;
       });
-    
+
     _controller.reset();
     _controller.forward();
   }
-  
-  // Calculate angle from position relative to center
-  double _getAngleFromPosition(Offset center, Offset position) {
-    final deltaX = position.dx - center.dx;
-    final deltaY = position.dy - center.dy;
-    // Calculate angle in radians
-    return atan2(deltaY, deltaX);
-  }
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -448,8 +444,14 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
                                       ),
                                     ],
                             ),
-                            child: Transform.rotate(
-                              angle: _currentRotation,
+                            child: ValueListenableBuilder<double>(
+                              valueListenable: _rotation,
+                              builder: (context, angle, child) {
+                                return Transform.rotate(
+                                  angle: angle,
+                                  child: child,
+                                );
+                              },
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 300),
                                 decoration: BoxDecoration(
@@ -468,8 +470,7 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
                                     suggestions: _suggestions,
                                     selectedSegment: _selectedSegment,
                                     colors: wheelColors,
-                                    getIcon: (suggestion) => Provider.of<SuggestionsRepository>(context, listen: false)
-                                        .getIconForSuggestion(suggestion),
+                                    icons: _suggestionIcons,
                                   ),
                                 ),
                               ),

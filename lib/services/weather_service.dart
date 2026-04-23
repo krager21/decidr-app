@@ -16,9 +16,11 @@ class WeatherService extends ChangeNotifier {
   /// Cache duration for weather data (30 minutes)
   static const cacheDuration = Duration(minutes: 30);
 
-  /// OpenWeatherMap API key (users should replace with their own key)
-  /// Get a free API key at: https://openweathermap.org/api
-  static const String _apiKey = 'YOUR_API_KEY_HERE';
+  /// OpenWeatherMap API key, injected at build time.
+  /// Provide via: `flutter run --dart-define=OPENWEATHER_API_KEY=...`
+  /// Get a free key at: https://openweathermap.org/api
+  static const String _apiKey =
+      String.fromEnvironment('OPENWEATHER_API_KEY');
 
   /// Get current weather data (returns cached data if still valid)
   WeatherData? get currentWeather => _currentWeather;
@@ -60,7 +62,7 @@ class WeatherService extends ChangeNotifier {
       }
 
       // Check if API key is set
-      if (_apiKey == 'YOUR_API_KEY_HERE') {
+      if (_apiKey.isEmpty) {
         debugPrint('Weather API key not configured');
         _error = 'Weather service not configured';
         _isLoading = false;
