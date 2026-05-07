@@ -357,4 +357,13 @@ const Map<String, IconData> _materialIcons = {
   'star': Icons.star,
   'favorite': Icons.favorite,
   'local_activity_outlined': Icons.local_activity_outlined,
+  // Phase 4 additions
+  'shower': Icons.shower,
+  'newspaper': Icons.newspaper,
+  'explore': Icons.explore,
+  'emoji_events': Icons.emoji_events,
+  'videocam': Icons.videocam,
+  'track_changes': Icons.track_changes,
+  'waves': Icons.waves,
+  'iron': Icons.iron,
 };

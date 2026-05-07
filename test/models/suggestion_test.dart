@@ -87,9 +87,11 @@ void main() {
       }
     });
 
-    test('catalog has at least 60 entries', () {
-      // Sanity check on Phase 1 catalog size; will grow in Phase 4.
-      expect(defaultSuggestions.length, greaterThanOrEqualTo(60));
+    test('catalog has at least 120 entries', () {
+      // Phase 4 brings the catalog to ~140 entries across 12 buckets.
+      // The bound is loose — additions are welcome; we just want
+      // to fail loud if a regression deletes large chunks of content.
+      expect(defaultSuggestions.length, greaterThanOrEqualTo(120));
     });
   });
 
