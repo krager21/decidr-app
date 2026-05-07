@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/preferences_model.dart';
-import '../utils/decidr_theme.dart';
 import '../services/context_service.dart';
 
 /// Settings page with app configuration
@@ -61,37 +60,28 @@ class SettingsPage extends StatelessWidget {
                   preferencesModel.updatePreference('useDarkMode', value);
                 },
         ),
-        ListTile(
-          title: const Text('Wheel Color Theme'),
-          subtitle: Text(preferencesModel.colorTheme),
-          leading: const Icon(Icons.color_lens),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            _showColorThemeDialog(context);
-          },
-        ),
       ],
     );
   }
-  
-  // Build wheel settings section
+
+  // Build decision-flow settings section
   Widget _buildWheelSettings(BuildContext context) {
     final theme = Theme.of(context);
     final preferencesModel = Provider.of<PreferencesModel>(context);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text(
-            'Wheel Experience',
+            'Experience',
             style: theme.textTheme.titleLarge,
           ),
         ),
         SwitchListTile(
           title: const Text('Haptic Feedback'),
-          subtitle: const Text('Enable vibration when wheel stops'),
+          subtitle: const Text('Vibrate when cards lock in'),
           secondary: const Icon(Icons.vibration),
           value: preferencesModel.enableHaptics,
           onChanged: (value) {
@@ -153,58 +143,6 @@ class SettingsPage extends StatelessWidget {
     );
   }
   
-  // Show color theme dialog
-  void _showColorThemeDialog(BuildContext context) {
-    final theme = Theme.of(context);
-    final preferencesModel = Provider.of<PreferencesModel>(context, listen: false);
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Choose Wheel Color Theme'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: preferencesModel.themeOptions.length,
-            itemBuilder: (context, index) {
-              final option = preferencesModel.themeOptions[index];
-              final isSelected = preferencesModel.colorTheme.toLowerCase() == option.toLowerCase();
-              final colors = DecidrTheme.getWheelColors(option.toLowerCase());
-              
-              return ListTile(
-                title: Text(option),
-                selected: isSelected,
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: colors.take(4).toList(),
-                    ),
-                  ),
-                ),
-                trailing: isSelected ? Icon(Icons.check, color: theme.colorScheme.primary) : null,
-                onTap: () {
-                  preferencesModel.updatePreference('colorTheme', option.toLowerCase());
-                  Navigator.pop(context);
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-  }
   
   // Show reset preferences dialog
   void _showResetPreferencesDialog(BuildContext context) {
@@ -255,8 +193,9 @@ class SettingsPage extends StatelessWidget {
       children: [
         const SizedBox(height: 16),
         const Text(
-          'Decidr helps you make decisions with a fun spin of the wheel! '
-          'Get personalized suggestions based on your preferences and mood.',
+          'Decidr helps you make decisions by dealing you three options. '
+          'Get personalised activity suggestions based on your mood, '
+          'energy, and time.',
         ),
         const SizedBox(height: 16),
         const Text(

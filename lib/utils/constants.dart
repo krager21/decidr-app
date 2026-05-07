@@ -3,40 +3,6 @@ library;
 
 import 'package:flutter/material.dart';
 
-/// Constants related to the spinning wheel
-class WheelConstants {
-  WheelConstants._(); // Private constructor to prevent instantiation
-
-  // Wheel dimensions
-  static const double wheelSize = 300.0;
-  static const double wheelShadowSize = 310.0;
-  static const double centerKnobSize = 40.0;
-  static const double centerKnobInnerSize = 15.0;
-  static const double pointerSize = 40.0;
-
-  // Spin animation parameters
-  static const int minSpinRotations = 4;
-  static const int maxSpinRotations = 6;
-  static const Duration minSpinDuration = Duration(seconds: 4);
-  static const Duration maxSpinDuration = Duration(seconds: 6);
-  static const Duration snapDuration = Duration(milliseconds: 300);
-
-  // Wheel rendering
-  static const double iconRadiusRatio = 0.65;
-  static const double iconSize = 22.0;
-  static const double segmentBorderWidth = 3.0;
-  static const double outerRingWidth = 5.0;
-
-  // Gesture parameters
-  static const double minVelocityForMomentum = 1.0;
-  static const double velocityMultiplier = 2.0;
-  static const double velocityDurationFactor = 0.5;
-
-  // Haptic feedback
-  static const Duration hapticDelayHeavy = Duration(milliseconds: 100);
-  static const Duration hapticDelayMedium = Duration(milliseconds: 70);
-}
-
 /// Constants for suggestions and filtering
 class SuggestionConstants {
   SuggestionConstants._();
@@ -108,7 +74,6 @@ class UIConstants {
 
   // Button sizes
   static const Size minButtonSize = Size(200, 56);
-  static const EdgeInsets spinButtonPadding = EdgeInsets.symmetric(horizontal: 32, vertical: 16);
 }
 
 /// Constants for persistence and storage
@@ -140,8 +105,9 @@ class AppConstants {
   static const String appVersion = '2.0.0';
   static const String appLegalese = '© 2025 Decidr App';
   static const String appDescription =
-      'Decidr helps you make decisions with a fun spin of the wheel! '
-      'Get personalized suggestions based on your preferences and mood.';
+      'Decidr helps you make decisions by dealing you three options. '
+      'Get personalised activity suggestions based on your mood, '
+      'energy, and time.';
   static const String appEnhancedFeatures =
       'Enhanced with Material 3 design, dynamic themes, and personalized suggestions.';
 }

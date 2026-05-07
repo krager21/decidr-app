@@ -91,7 +91,7 @@ class WelcomePage extends StatelessWidget {
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                'Let us help you decide with a fun spin of the wheel! Tell us a little about yourself and get personalized activity suggestions.',
+                                'Let us help you decide. Tell us a little about yourself, and we\'ll deal you three personalised activity suggestions.',
                                 textAlign: TextAlign.center,
                                 style: theme.textTheme.bodyLarge,
                               ),

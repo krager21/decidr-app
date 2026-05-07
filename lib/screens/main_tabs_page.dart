@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'card_reveal_page.dart';
 import 'history_page.dart';
 import 'profile_page.dart';
-import 'wheel_page.dart';
 
-/// Main tabs: Wheel (legacy), Cards (new reveal flow), History, Profile.
+/// Main tabs: Decide (cards reveal), History, Profile.
 ///
-/// The Cards tab is shipped alongside the Wheel — the two are functionally
-/// equivalent decision flows; keeping both lets users (and us) compare.
+/// The legacy spinning wheel has been retired; the cards flow is now
+/// the only decision UI.
 class MainTabsPage extends StatefulWidget {
   const MainTabsPage({super.key});
 
@@ -19,7 +18,6 @@ class _MainTabsPageState extends State<MainTabsPage> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = [
-    const WheelPage(),
     const CardRevealPage(),
     const HistoryPage(),
     const ProfilePage(),
@@ -38,12 +36,8 @@ class _MainTabsPageState extends State<MainTabsPage> {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.shuffle),
-            label: 'Wheel',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.style),
-            label: 'Cards',
+            label: 'Decide',
           ),
           NavigationDestination(
             icon: Icon(Icons.history),

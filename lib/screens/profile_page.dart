@@ -5,7 +5,6 @@ import '../models/suggestions_repository.dart';
 import '../models/activity_history_model.dart';
 import 'questionnaire_page.dart';
 import '../utils/constants.dart';
-import '../utils/decidr_theme.dart';
 
 /// Profile page with settings and favorites
 class ProfilePage extends StatelessWidget {
@@ -510,75 +509,12 @@ class ProfilePage extends StatelessWidget {
           ),
           const Divider(height: 1),
           ListTile(
-            title: const Text('Wheel Color Theme'),
-            subtitle: Text(preferencesModel.colorTheme),
-            leading: const Icon(Icons.color_lens),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              _showColorThemeDialog(context);
-            },
-          ),
-          const Divider(height: 1),
-          ListTile(
             title: const Text('About Decidr'),
             subtitle: const Text('Version 2.0.0'),
             leading: const Icon(Icons.info_outline),
             onTap: () {
               _showAboutDialog(context);
             },
-          ),
-        ],
-      ),
-    );
-  }
-  
-  // Show color theme dialog
-  void _showColorThemeDialog(BuildContext context) {
-    final theme = Theme.of(context);
-    final preferencesModel = Provider.of<PreferencesModel>(context, listen: false);
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Choose Wheel Color Theme'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: preferencesModel.themeOptions.length,
-            itemBuilder: (context, index) {
-              final option = preferencesModel.themeOptions[index];
-              final isSelected = preferencesModel.colorTheme.toLowerCase() == option.toLowerCase();
-              final colors = DecidrTheme.getWheelColors(option.toLowerCase());
-              
-              return ListTile(
-                title: Text(option),
-                selected: isSelected,
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: colors.take(4).toList(),
-                    ),
-                  ),
-                ),
-                trailing: isSelected ? Icon(Icons.check, color: theme.colorScheme.primary) : null,
-                onTap: () {
-                  preferencesModel.updatePreference('colorTheme', option.toLowerCase());
-                  Navigator.pop(context);
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: const Text('Cancel'),
           ),
         ],
       ),
@@ -600,8 +536,9 @@ class ProfilePage extends StatelessWidget {
       children: [
         const SizedBox(height: 16),
         const Text(
-          'Decidr helps you make decisions with a fun spin of the wheel! '
-          'Get personalized suggestions based on your preferences and mood.',
+          'Decidr helps you make decisions by dealing you three options. '
+          'Get personalised activity suggestions based on your mood, '
+          'energy, and time.',
         ),
         const SizedBox(height: 16),
         const Text(

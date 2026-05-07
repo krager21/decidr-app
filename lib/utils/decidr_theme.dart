@@ -4,62 +4,6 @@ import 'package:flutter/material.dart';
 class DecidrTheme {
   DecidrTheme._(); // Private constructor to prevent instantiation
 
-  // Cached wheel color themes
-  static const List<Color> _rainbowColors = [
-    Colors.red,
-    Colors.orange,
-    Colors.yellow,
-    Colors.green,
-    Colors.blue,
-    Colors.indigo,
-    Colors.purple,
-    Colors.pink,
-  ];
-
-  static const List<Color> _pastelsColors = [
-    Color(0xFFFFC3C3), // Pastel red
-    Color(0xFFFFD8B3), // Pastel orange
-    Color(0xFFFFFAB3), // Pastel yellow
-    Color(0xFFD1FFC3), // Pastel green
-    Color(0xFFC3F2FF), // Pastel blue
-    Color(0xFFD4C3FF), // Pastel indigo
-    Color(0xFFEDC3FF), // Pastel purple
-    Color(0xFFFFCCE6), // Pastel pink
-  ];
-
-  static final List<Color> _monochromeColors = [
-    Colors.grey.shade300,
-    Colors.grey.shade400,
-    Colors.grey.shade500,
-    Colors.grey.shade600,
-    Colors.grey.shade700,
-    Colors.grey.shade800,
-    Colors.black,
-    Colors.grey.shade900,
-  ];
-
-  static const List<Color> _oceanColors = [
-    Color(0xFF69D2E7), // Light blue
-    Color(0xFF5DB8C0), // Teal
-    Color(0xFF4F92B1), // Medium blue
-    Color(0xFF3F7F93), // Blue grey
-    Color(0xFF2C6D83), // Deep blue
-    Color(0xFF1A5D76), // Navy
-    Color(0xFF0A4965), // Dark navy
-    Color(0xFF043A54), // Very dark blue
-  ];
-
-  static const List<Color> _sunsetColors = [
-    Color(0xFFFFC3A0), // Light peach
-    Color(0xFFFFB088), // Peach
-    Color(0xFFFF9E70), // Dark peach
-    Color(0xFFFF8B58), // Orange
-    Color(0xFFFF7940), // Dark orange
-    Color(0xFFFF6726), // Red orange
-    Color(0xFFFF560E), // Rust
-    Color(0xFFFF4500), // Red
-  ];
-
   // Color schemes
   static final lightColorScheme = ColorScheme(
     brightness: Brightness.light,
@@ -119,28 +63,6 @@ class DecidrTheme {
     inversePrimary: Colors.blue.shade700,
   );
 
-  /// Returns the wheel color theme based on the selected theme name.
-  ///
-  /// Returns a cached list of colors to avoid recreating lists on each call.
-  /// Available themes: rainbow, pastels, monochrome, ocean, sunset.
-  /// Defaults to rainbow if theme name is not recognized.
-  static List<Color> getWheelColors(String theme) {
-    switch (theme.toLowerCase()) {
-      case 'rainbow':
-        return _rainbowColors;
-      case 'pastels':
-        return _pastelsColors;
-      case 'monochrome':
-        return _monochromeColors;
-      case 'ocean':
-        return _oceanColors;
-      case 'sunset':
-        return _sunsetColors;
-      default:
-        return _rainbowColors;
-    }
-  }
-  
   // Generate theme based on preferences
 static ThemeData getThemeData(BuildContext context, bool isDark, ColorScheme? dynamicScheme) {
   final baseScheme = isDark 
