@@ -61,6 +61,14 @@ class SuggestionConstants {
   static const double energyLowThreshold = 2.5;
   static const double energyMediumThreshold = 3.5;
   static const double energyHighThreshold = 4.5;
+
+  // Custom suggestions
+  /// Maximum length for a user-supplied custom suggestion.
+  /// Mirrored by the input field's `maxLength` in the UI.
+  static const int customSuggestionMaxLength = 50;
+
+  /// Maximum number of custom suggestions a user can save.
+  static const int customSuggestionMaxCount = 100;
 }
 
 /// Constants for UI elements

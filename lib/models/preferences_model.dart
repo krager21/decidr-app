@@ -2,6 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/context_service.dart';
 
+/// Strongly-typed identifiers for user preferences.
+///
+/// Each value carries the SharedPreferences storage key. Using the enum
+/// instead of raw strings catches typos at compile time and makes adding
+/// a new preference a single-place change.
+enum PreferenceKey {
+  activityPreference('activityPreference'),
+  mood('mood'),
+  energyLevel('energyLevel'),
+  timeOfDay('timeOfDay'),
+  autoDetectTime('autoDetectTime'),
+  socialContext('socialContext'),
+  duration('duration'),
+  useDarkMode('useDarkMode'),
+  useSystemTheme('useSystemTheme'),
+  enableHaptics('enableHaptics'),
+  colorTheme('colorTheme');
+
+  /// The SharedPreferences key used to persist this preference.
+  final String storageKey;
+  const PreferenceKey(this.storageKey);
+
+  /// Look up an enum value by its storage key string. Returns `null` if
+  /// no match is found. Used to bridge the legacy string-based API.
+  static PreferenceKey? fromString(String key) {
+    for (final p in PreferenceKey.values) {
+      if (p.storageKey == key) return p;
+    }
+    return null;
+  }
+}
+
 /// Model for managing user preferences with persistent storage
 ///
 /// Handles all user settings including:
@@ -135,48 +167,61 @@ class PreferencesModel extends ChangeNotifier {
     await _prefs.setStringList('favoriteActivities', favoriteActivities);
   }
   
-  /// Update a single preference by key and automatically save
+  /// Update a single preference (typed). Saves and notifies listeners.
   ///
-  /// Accepts a [key] matching the preference name and a [value] of appropriate type.
-  /// Automatically saves to SharedPreferences and notifies listeners.
-  void updatePreference(String key, dynamic value) {
+  /// Prefer this over [updatePreference] for new code — using the enum
+  /// catches typos at compile time. The exhaustive switch ensures that
+  /// adding a new [PreferenceKey] surfaces a missing case as an analyzer
+  /// warning.
+  void setPreference(PreferenceKey key, dynamic value) {
     switch (key) {
-      case 'activityPreference':
-        activityPreference = value;
+      case PreferenceKey.activityPreference:
+        activityPreference = value as String?;
         break;
-      case 'mood':
-        mood = value;
+      case PreferenceKey.mood:
+        mood = value as String?;
         break;
-      case 'energyLevel':
-        energyLevel = value;
+      case PreferenceKey.energyLevel:
+        energyLevel = value as double;
         break;
-      case 'timeOfDay':
-        timeOfDay = value;
+      case PreferenceKey.timeOfDay:
+        timeOfDay = value as String?;
         break;
-      case 'autoDetectTime':
-        autoDetectTime = value;
+      case PreferenceKey.autoDetectTime:
+        autoDetectTime = value as bool;
         break;
-      case 'socialContext':
-        socialContext = value;
+      case PreferenceKey.socialContext:
+        socialContext = value as String?;
         break;
-      case 'duration':
-        duration = value;
+      case PreferenceKey.duration:
+        duration = value as String?;
         break;
-      case 'useDarkMode':
-        useDarkMode = value;
+      case PreferenceKey.useDarkMode:
+        useDarkMode = value as bool;
         break;
-      case 'useSystemTheme':
-        useSystemTheme = value;
+      case PreferenceKey.useSystemTheme:
+        useSystemTheme = value as bool;
         break;
-      case 'enableHaptics':
-        enableHaptics = value;
+      case PreferenceKey.enableHaptics:
+        enableHaptics = value as bool;
         break;
-      case 'colorTheme':
-        colorTheme = value;
+      case PreferenceKey.colorTheme:
+        colorTheme = value as String;
         break;
     }
     savePreferences();
     notifyListeners();
+  }
+
+  /// Update a single preference by string key (legacy API).
+  ///
+  /// Routes through [setPreference] using [PreferenceKey.fromString].
+  /// Unknown keys are silently ignored to preserve prior behavior.
+  /// New code should use [setPreference] with [PreferenceKey] directly.
+  void updatePreference(String key, dynamic value) {
+    final preferenceKey = PreferenceKey.fromString(key);
+    if (preferenceKey == null) return;
+    setPreference(preferenceKey, value);
   }
   
   /// Toggle an activity's favorite status

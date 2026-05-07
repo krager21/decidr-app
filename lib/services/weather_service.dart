@@ -16,9 +16,20 @@ class WeatherService extends ChangeNotifier {
   /// Cache duration for weather data (30 minutes)
   static const cacheDuration = Duration(minutes: 30);
 
-  /// OpenWeatherMap API key (users should replace with their own key)
+  /// OpenWeatherMap API key, supplied at build time via `--dart-define`.
+  ///
+  /// To enable the weather feature, build with:
+  ///
+  ///   flutter run --dart-define=OPENWEATHER_API_KEY=your_key_here
+  ///
   /// Get a free API key at: https://openweathermap.org/api
-  static const String _apiKey = 'YOUR_API_KEY_HERE';
+  ///
+  /// When unset, the weather service is disabled and `fetchWeather` returns null.
+  static const String _apiKey =
+      String.fromEnvironment('OPENWEATHER_API_KEY', defaultValue: '');
+
+  /// Whether the weather service has been configured with an API key.
+  static bool get isConfigured => _apiKey.isNotEmpty;
 
   /// Get current weather data (returns cached data if still valid)
   WeatherData? get currentWeather => _currentWeather;
@@ -59,9 +70,12 @@ class WeatherService extends ChangeNotifier {
         lon = position.longitude;
       }
 
-      // Check if API key is set
-      if (_apiKey == 'YOUR_API_KEY_HERE') {
-        debugPrint('Weather API key not configured');
+      // Check if API key is set (supplied via --dart-define at build time)
+      if (!isConfigured) {
+        debugPrint(
+          'Weather API key not configured. '
+          'Pass --dart-define=OPENWEATHER_API_KEY=... at build time.',
+        );
         _error = 'Weather service not configured';
         _isLoading = false;
         notifyListeners();

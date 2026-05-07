@@ -4,6 +4,7 @@ import '../models/preferences_model.dart';
 import '../models/suggestions_repository.dart';
 import '../models/activity_history_model.dart';
 import 'questionnaire_page.dart';
+import '../utils/constants.dart';
 import '../utils/decidr_theme.dart';
 
 /// Profile page with settings and favorites
@@ -392,7 +393,7 @@ class ProfilePage extends StatelessWidget {
             hintText: 'Enter your custom activity',
             border: OutlineInputBorder(),
           ),
-          maxLength: 50,
+          maxLength: SuggestionConstants.customSuggestionMaxLength,
         ),
         actions: [
           TextButton(
@@ -403,10 +404,19 @@ class ProfilePage extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () {
-              final suggestion = textController.text.trim();
-              if (suggestion.isNotEmpty) {
-                suggestionsRepo.addCustomSuggestion(suggestion);
+              final added = suggestionsRepo.addCustomSuggestion(
+                textController.text,
+              );
+              if (added) {
                 Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Could not add suggestion (empty, duplicate, or list full).',
+                    ),
+                  ),
+                );
               }
             },
             child: const Text('Add'),

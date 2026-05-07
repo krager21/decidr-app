@@ -50,12 +50,35 @@ class SuggestionsRepository extends ChangeNotifier {
     notifyListeners();
   }
   
-  // Add a custom suggestion
-  void addCustomSuggestion(String suggestion) {
-    if (!customSuggestions.contains(suggestion)) {
-      customSuggestions.add(suggestion);
-      saveCustomSuggestions();
+  /// Add a custom user-defined suggestion.
+  ///
+  /// Trims whitespace, enforces a max length of
+  /// [SuggestionConstants.customSuggestionMaxLength], deduplicates
+  /// case-insensitively, and caps the total count at
+  /// [SuggestionConstants.customSuggestionMaxCount].
+  ///
+  /// Returns `true` if the suggestion was added, `false` if it was
+  /// rejected (empty, too long, duplicate, or list is full).
+  bool addCustomSuggestion(String suggestion) {
+    final trimmed = suggestion.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.length > SuggestionConstants.customSuggestionMaxLength) {
+      return false;
     }
+    if (customSuggestions.length >=
+        SuggestionConstants.customSuggestionMaxCount) {
+      return false;
+    }
+    // Case-insensitive duplicate check.
+    final lower = trimmed.toLowerCase();
+    final isDuplicate = customSuggestions.any(
+      (s) => s.toLowerCase() == lower,
+    );
+    if (isDuplicate) return false;
+
+    customSuggestions.add(trimmed);
+    saveCustomSuggestions();
+    return true;
   }
   
   // Remove a custom suggestion

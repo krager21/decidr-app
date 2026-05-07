@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,8 +15,32 @@ import 'screens/settings_page.dart';
 import 'screens/questionnaire_page.dart';
 import 'utils/decidr_theme.dart';
 
-void main() async {
+/// Global hook for surfacing uncaught errors to a logging service.
+///
+/// Currently logs to the console via [debugPrint]. Wire a crash reporter
+/// here (e.g. Sentry, Firebase Crashlytics) by replacing the body. Both
+/// Flutter framework errors and uncaught zone errors funnel through this.
+void _reportError(Object error, StackTrace stack) {
+  debugPrint('Uncaught error: $error\n$stack');
+}
+
+void main() {
+  // Run the app inside a guarded zone so any uncaught async error is
+  // captured rather than crashing silently.
+  runZonedGuarded(_bootstrap, _reportError);
+}
+
+Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Route Flutter framework errors through the same reporter. In release
+  // builds we suppress the default console dump and rely on the reporter.
+  FlutterError.onError = (FlutterErrorDetails details) {
+    _reportError(details.exception, details.stack ?? StackTrace.empty);
+    if (kDebugMode) {
+      FlutterError.presentError(details);
+    }
+  };
 
   // Initialize preferences
   final prefs = await SharedPreferences.getInstance();
