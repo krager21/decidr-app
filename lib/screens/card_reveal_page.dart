@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,14 +14,13 @@ import '../widgets/decision_card.dart';
 
 /// Stages of the card-reveal animation flow.
 enum _RevealStage {
-  /// Pre-deal — three placeholder cards waiting for "Decide" tap.
+  /// Pre-deal — three face-down cards waiting for "Deal cards" tap.
   idle,
 
-  /// All three cards are cycling through candidates; locks roll in
-  /// left-to-right with haptic taps.
+  /// Cards are flipping face-up one at a time (left → right → middle).
   dealing,
 
-  /// All cards locked; the chosen middle card is elevated and the
+  /// All cards face-up; the chosen middle card is elevated and the
   /// description / actions are revealed below.
   settled,
 
@@ -31,12 +29,12 @@ enum _RevealStage {
   empty,
 }
 
-/// Card-reveal alternative to the spinning wheel.
+/// Tarot-style card reveal screen.
 ///
-/// Three cards animate "thinking" by cycling through real candidates
-/// from the suggestions catalog. They lock left-to-right with light
-/// haptics; the middle card becomes the chosen recommendation. The
-/// flanking pair stay visible as honestly-considered alternatives.
+/// Three face-down cards are dealt; they flip up one at a time in a
+/// dramatic sequence — left first, right second, middle last (the
+/// chosen recommendation, saved for the end). The flanking pair stay
+/// visible after the reveal as honestly-considered alternatives.
 class CardRevealPage extends StatefulWidget {
   const CardRevealPage({super.key});
 
@@ -46,47 +44,47 @@ class CardRevealPage extends StatefulWidget {
 
 class _CardRevealPageState extends State<CardRevealPage> {
   // ─── animation timing knobs ───────────────────────────────────
-  // Each card swap during cycling.
-  static const _cycleInterval = Duration(milliseconds: 280);
+  // Sequence: left flips, right flips, middle flips, then settle.
+  // Tuning these is the easiest way to adjust feel.
+  static const _firstFlipDelay = Duration(milliseconds: 250);
+  static const _secondFlipDelay = Duration(milliseconds: 1000);
+  static const _thirdFlipDelay = Duration(milliseconds: 1850);
+  static const _settleDelay = Duration(milliseconds: 2700);
 
-  // When each card locks (offset from the start of the deal).
-  static const _lockDelay1 = Duration(milliseconds: 1200);
-  static const _lockDelay2 = Duration(milliseconds: 1600);
-  static const _lockDelay3 = Duration(milliseconds: 2000);
-  static const _settleDelay = Duration(milliseconds: 2300);
+  /// When re-dealing from the settled state, give the existing cards
+  /// a moment to flip back down before showing the new pool.
+  static const _redealResetDelay = Duration(milliseconds: 450);
 
   // ─── state ────────────────────────────────────────────────────
   _RevealStage _stage = _RevealStage.idle;
 
-  /// Pool of candidates fetched at the start of each deal. The first
-  /// three become the locked values for cards 0–2; the rest fuel the
-  /// cycling animation.
-  List<Suggestion> _pool = [];
+  /// The three suggestions assigned to the three card slots, in order.
+  /// Slot 1 (the middle card) is always the chosen recommendation.
+  List<Suggestion?> _slotSuggestions = [null, null, null];
 
-  /// Currently displayed Suggestion per card slot (changes during cycling).
-  final List<Suggestion?> _displayed = [null, null, null];
+  /// Flanking alternatives shown in the "also considered" line.
+  List<Suggestion> _flanking = [];
 
-  /// Which cards have locked (no longer cycle).
-  final Set<int> _locked = {};
+  /// Which slots have flipped face-up so far during the dealing stage.
+  /// Slot 1 (middle) is always the last to be added.
+  final Set<int> _revealedSlots = {};
 
-  // Timers driving the animation.
-  Timer? _cycleTimer;
-  final List<Timer?> _lockTimers = [null, null, null];
+  // Timers driving the reveal sequence.
+  final List<Timer?> _flipTimers = [null, null, null];
   Timer? _settleTimer;
 
-  /// The chosen suggestion is always [_pool[1]] (the middle card)
-  /// once we're in [_RevealStage.settled].
+  /// The chosen suggestion is always [_slotSuggestions[1]] (the middle
+  /// card) once we're in [_RevealStage.settled].
   Suggestion? get _chosen =>
-      _stage == _RevealStage.settled && _pool.length >= 2 ? _pool[1] : null;
+      _stage == _RevealStage.settled ? _slotSuggestions[1] : null;
 
   @override
   void initState() {
     super.initState();
-    // Defer initial preferences-loaded check to next frame so providers
-    // are ready.
+    // Trigger a rebuild after first frame so the empty/idle distinction
+    // is correct based on currently-loaded preferences.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Just trigger a rebuild so the empty/idle distinction is correct.
       setState(() {});
     });
   }
@@ -98,11 +96,9 @@ class _CardRevealPageState extends State<CardRevealPage> {
   }
 
   void _cancelAllTimers() {
-    _cycleTimer?.cancel();
-    _cycleTimer = null;
-    for (var i = 0; i < _lockTimers.length; i++) {
-      _lockTimers[i]?.cancel();
-      _lockTimers[i] = null;
+    for (var i = 0; i < _flipTimers.length; i++) {
+      _flipTimers[i]?.cancel();
+      _flipTimers[i] = null;
     }
     _settleTimer?.cancel();
     _settleTimer = null;
@@ -112,16 +108,15 @@ class _CardRevealPageState extends State<CardRevealPage> {
   /// user's preferences don't yield enough candidates.
   List<Suggestion>? _buildPool() {
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
-    final repo =
-        Provider.of<SuggestionsRepository>(context, listen: false);
+    final repo = Provider.of<SuggestionsRepository>(context, listen: false);
     final weather =
         Provider.of<WeatherService>(context, listen: false).currentWeather;
     final feedback = Provider.of<FeedbackModel>(context, listen: false);
 
     if (!prefs.arePreferencesComplete) return null;
 
-    final activityType =
-        ActivityType.values.firstWhere((e) => e.label == prefs.activityPreference);
+    final activityType = ActivityType.values
+        .firstWhere((e) => e.label == prefs.activityPreference);
     final mood = Mood.values.firstWhere((e) => e.label == prefs.mood);
     final timeOfDay = TimeOfDayPref.values
         .firstWhere((e) => e.label == prefs.effectiveTimeOfDay);
@@ -147,8 +142,10 @@ class _CardRevealPageState extends State<CardRevealPage> {
     return pool;
   }
 
-  void _deal() {
-    if (_stage == _RevealStage.dealing) return; // already dealing
+  /// Kick off a fresh deal — cards flip back to face-down (if applicable)
+  /// and then flip up sequentially with new candidates.
+  Future<void> _deal() async {
+    if (_stage == _RevealStage.dealing) return;
     _cancelAllTimers();
 
     final pool = _buildPool();
@@ -157,51 +154,34 @@ class _CardRevealPageState extends State<CardRevealPage> {
       return;
     }
 
+    // If we were settled, flip the cards back to face-down before
+    // re-dealing so the visual transition is smooth.
+    if (_stage == _RevealStage.settled) {
+      setState(() {
+        _stage = _RevealStage.idle;
+        _revealedSlots.clear();
+      });
+      await Future.delayed(_redealResetDelay);
+      if (!mounted) return;
+    }
+
     setState(() {
       _stage = _RevealStage.dealing;
-      _pool = pool;
-      _locked.clear();
-      // Seed cycling slots with non-final candidates so the animation
-      // doesn't briefly show the answer before it cycles.
-      _displayed[0] = pool[(3) % pool.length];
-      _displayed[1] = pool[(5) % pool.length];
-      _displayed[2] = pool[(7) % pool.length];
+      _slotSuggestions = [pool[0], pool[1], pool[2]];
+      _flanking = [pool[0], pool[2]];
+      _revealedSlots.clear();
     });
 
-    // Periodic cycler — each tick advances every unlocked card to a new
-    // pool item. Stops automatically when all three are locked.
-    final rng = Random();
-    _cycleTimer = Timer.periodic(_cycleInterval, (timer) {
-      if (!mounted) return;
-      setState(() {
-        for (var i = 0; i < 3; i++) {
-          if (_locked.contains(i)) continue;
-          // Pick something from the pool that isn't card i's final pick
-          // and isn't what's currently shown — keeps cycling visible.
-          final candidates = pool
-              .where((s) => s.id != pool[i].id && s.id != _displayed[i]?.id)
-              .toList();
-          if (candidates.isEmpty) continue;
-          _displayed[i] = candidates[rng.nextInt(candidates.length)];
-        }
-      });
-    });
-
-    // Lock cards left-to-right.
-    _lockTimers[0] = Timer(_lockDelay1, () => _lockCard(0, soft: true));
-    _lockTimers[1] = Timer(_lockDelay2, () => _lockCard(1, soft: true));
-    _lockTimers[2] = Timer(_lockDelay3, () => _lockCard(2, soft: false));
-
-    // Final settle: marks middle card as chosen, reveals description.
+    // Reveal sequence: left → right → middle (chosen).
+    _flipTimers[0] = Timer(_firstFlipDelay, () => _revealSlot(0, soft: true));
+    _flipTimers[1] = Timer(_secondFlipDelay, () => _revealSlot(2, soft: true));
+    _flipTimers[2] = Timer(_thirdFlipDelay, () => _revealSlot(1, soft: false));
     _settleTimer = Timer(_settleDelay, _settle);
   }
 
-  void _lockCard(int index, {required bool soft}) {
+  void _revealSlot(int slot, {required bool soft}) {
     if (!mounted) return;
-    setState(() {
-      _locked.add(index);
-      _displayed[index] = _pool[index];
-    });
+    setState(() => _revealedSlots.add(slot));
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
     if (prefs.enableHaptics) {
       if (soft) {
@@ -214,10 +194,7 @@ class _CardRevealPageState extends State<CardRevealPage> {
 
   void _settle() {
     if (!mounted) return;
-    _cycleTimer?.cancel();
-    _cycleTimer = null;
     setState(() => _stage = _RevealStage.settled);
-
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
     if (prefs.enableHaptics) {
       HapticFeedback.heavyImpact();
@@ -228,11 +205,9 @@ class _CardRevealPageState extends State<CardRevealPage> {
     _cancelAllTimers();
     setState(() {
       _stage = _RevealStage.idle;
-      _pool = [];
-      _displayed[0] = null;
-      _displayed[1] = null;
-      _displayed[2] = null;
-      _locked.clear();
+      _slotSuggestions = [null, null, null];
+      _flanking = [];
+      _revealedSlots.clear();
     });
   }
 
@@ -322,7 +297,7 @@ class _CardRevealPageState extends State<CardRevealPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildContextChips(theme, prefs),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               // Content scrolls so the settled-state description doesn't
               // overflow on shorter windows (macOS, small phones).
               Expanded(
@@ -331,7 +306,7 @@ class _CardRevealPageState extends State<CardRevealPage> {
                     children: [
                       const SizedBox(height: 12),
                       _buildCardsRow(),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 320),
                         transitionBuilder: (child, animation) {
@@ -394,29 +369,29 @@ class _CardRevealPageState extends State<CardRevealPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: List.generate(3, (i) {
-        final state = _stateForCard(i);
         return DecisionCard(
-          state: state,
-          suggestion: _displayed[i],
+          state: _stateForSlot(i),
+          suggestion: _slotSuggestions[i],
         );
       }),
     );
   }
 
-  DecisionCardState _stateForCard(int index) {
-    switch (_stage) {
-      case _RevealStage.idle:
-      case _RevealStage.empty:
-        return DecisionCardState.idle;
-      case _RevealStage.dealing:
-        return _locked.contains(index)
-            ? DecisionCardState.locked
-            : DecisionCardState.cycling;
-      case _RevealStage.settled:
-        return index == 1
-            ? DecisionCardState.chosen
-            : DecisionCardState.locked;
+  /// Map the page's overall stage + per-slot reveal status to the card's
+  /// own visual state.
+  DecisionCardState _stateForSlot(int slot) {
+    if (_stage == _RevealStage.idle || _stage == _RevealStage.empty) {
+      return DecisionCardState.faceDown;
     }
+    if (_stage == _RevealStage.dealing) {
+      return _revealedSlots.contains(slot)
+          ? DecisionCardState.revealed
+          : DecisionCardState.faceDown;
+    }
+    // settled
+    return slot == 1
+        ? DecisionCardState.chosen
+        : DecisionCardState.revealed;
   }
 
   Widget _buildBottomSection(ThemeData theme) {
@@ -424,7 +399,8 @@ class _CardRevealPageState extends State<CardRevealPage> {
       case _RevealStage.idle:
         return _buildIdleCallToAction(theme);
       case _RevealStage.dealing:
-        return _buildDealingHint(theme);
+        // No hint needed — the flips themselves are the visual feedback.
+        return const SizedBox(key: ValueKey('dealing'), height: 12);
       case _RevealStage.settled:
         return _buildSettledResult(theme);
       case _RevealStage.empty:
@@ -438,13 +414,13 @@ class _CardRevealPageState extends State<CardRevealPage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'We\'ll consider three options for you.',
+          'We\'ll deal three cards. The middle one is yours.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
         FilledButton.icon(
           onPressed: _deal,
           icon: const Icon(Icons.style),
@@ -458,27 +434,9 @@ class _CardRevealPageState extends State<CardRevealPage> {
     );
   }
 
-  Widget _buildDealingHint(ThemeData theme) {
-    return Padding(
-      key: const ValueKey('dealing'),
-      padding: const EdgeInsets.only(top: 8),
-      child: Text(
-        'Considering options…',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-          fontStyle: FontStyle.italic,
-        ),
-      ),
-    );
-  }
-
   Widget _buildSettledResult(ThemeData theme) {
     final chosen = _chosen;
     if (chosen == null) return const SizedBox.shrink();
-    final flanking = [
-      if (_pool.isNotEmpty) _pool[0],
-      if (_pool.length >= 3) _pool[2],
-    ];
 
     return Column(
       key: const ValueKey('settled'),
@@ -529,10 +487,10 @@ class _CardRevealPageState extends State<CardRevealPage> {
             ],
           ),
         ),
-        if (flanking.isNotEmpty) ...[
+        if (_flanking.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(
-            'Also considered:  ${flanking.map((s) => s.title).join('  ·  ')}',
+            'Also considered:  ${_flanking.map((s) => s.title).join('  ·  ')}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               fontStyle: FontStyle.italic,
