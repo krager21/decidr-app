@@ -184,7 +184,7 @@ static ThemeData getThemeData(BuildContext context, bool isDark, ColorScheme? dy
     ),
     
     // Card theme
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -223,7 +223,7 @@ static ThemeData getThemeData(BuildContext context, bool isDark, ColorScheme? dy
     ),
     
     // Dialog theme
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
