@@ -1,25 +1,30 @@
 import 'package:flutter/material.dart';
-import 'wheel_page.dart';
+import 'card_reveal_page.dart';
 import 'history_page.dart';
 import 'profile_page.dart';
+import 'wheel_page.dart';
 
-/// Main page with tabs for wheel, history, and profile
+/// Main tabs: Wheel (legacy), Cards (new reveal flow), History, Profile.
+///
+/// The Cards tab is shipped alongside the Wheel — the two are functionally
+/// equivalent decision flows; keeping both lets users (and us) compare.
 class MainTabsPage extends StatefulWidget {
   const MainTabsPage({super.key});
 
   @override
-  _MainTabsPageState createState() => _MainTabsPageState();
+  State<MainTabsPage> createState() => _MainTabsPageState();
 }
 
 class _MainTabsPageState extends State<MainTabsPage> {
   int _currentIndex = 0;
-  
+
   final List<Widget> _pages = [
     const WheelPage(),
+    const CardRevealPage(),
     const HistoryPage(),
     const ProfilePage(),
   ];
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -35,6 +40,10 @@ class _MainTabsPageState extends State<MainTabsPage> {
           NavigationDestination(
             icon: Icon(Icons.shuffle),
             label: 'Wheel',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.style),
+            label: 'Cards',
           ),
           NavigationDestination(
             icon: Icon(Icons.history),
