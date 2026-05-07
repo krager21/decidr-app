@@ -317,38 +317,43 @@ class _CardRevealPageState extends State<CardRevealPage> {
       appBar: AppBar(title: const Text('Decide')),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildContextChips(theme, prefs),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              // Content scrolls so the settled-state description doesn't
+              // overflow on shorter windows (macOS, small phones).
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildCardsRow(),
-                    const SizedBox(height: 28),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 320),
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 0.15),
-                              end: Offset.zero,
-                            ).animate(CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeOutCubic,
-                            )),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: _buildBottomSection(theme),
-                    ),
-                  ],
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      _buildCardsRow(),
+                      const SizedBox(height: 24),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 320),
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 0.15),
+                                end: Offset.zero,
+                              ).animate(CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              )),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: _buildBottomSection(theme),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
                 ),
               ),
             ],
