@@ -1,19 +1,49 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/suggestions_catalog.dart';
 import '../utils/constants.dart';
+import 'suggestion.dart';
 import 'weather_model.dart';
 import 'feedback_model.dart';
 
 /// Enhanced repository for managing activity suggestions with more variety
 class SuggestionsRepository extends ChangeNotifier {
   final SharedPreferences _prefs;
-  
+
   // Map of all available suggestions
   Map<String, Map<String, List<String>>> _suggestionsMap = {};
-  
+
   // User custom suggestions
   List<String> customSuggestions = [];
+
+  /// Structured catalog of suggestions with descriptions, icons, and metadata.
+  ///
+  /// Phase 1 of the catalog migration: this lives side-by-side with the legacy
+  /// [_suggestionsMap] / [customSuggestions]. The wheel and existing filters
+  /// continue to use the legacy strings; new card-reveal UI and structured
+  /// filtering will consume this list. Phase 2 unifies the two paths.
+  List<Suggestion> get catalog => List.unmodifiable(defaultSuggestions);
+
+  /// Look up a catalog suggestion by stable id. Returns null if not found.
+  Suggestion? suggestionById(String id) {
+    for (final s in defaultSuggestions) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
+
+  /// Look up a catalog suggestion by display title (case-insensitive).
+  ///
+  /// Used by the upcoming persistence migration to map legacy string-based
+  /// favorites/history entries to their structured equivalents.
+  Suggestion? suggestionByTitle(String title) {
+    final lower = title.toLowerCase();
+    for (final s in defaultSuggestions) {
+      if (s.title.toLowerCase() == lower) return s;
+    }
+    return null;
+  }
   
   // Popular activities that should appear more frequently
   final List<String> _popularActivities = [
