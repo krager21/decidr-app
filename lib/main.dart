@@ -9,6 +9,7 @@ import 'models/preferences_model.dart';
 import 'models/suggestions_repository.dart';
 import 'models/activity_history_model.dart';
 import 'models/feedback_model.dart';
+import 'services/migration_service.dart';
 import 'services/weather_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/settings_page.dart';
@@ -44,6 +45,11 @@ Future<void> _bootstrap() async {
 
   // Initialize preferences
   final prefs = await SharedPreferences.getInstance();
+
+  // Run any outstanding schema migrations before any model touches the
+  // persisted data. Phase 3 introduced v2 (title-keyed → id-keyed).
+  await MigrationService.migrateIfNeeded(prefs);
+
   final preferencesModel = PreferencesModel(prefs);
   await preferencesModel.loadPreferences();
 

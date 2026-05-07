@@ -282,20 +282,33 @@ class ProfilePage extends StatelessWidget {
         children: [
           for (int i = 0; i < favorites.length; i++) ...[
             if (i > 0) const Divider(height: 1),
-            ListTile(
-              leading: Icon(
-                suggestionsRepo.getIconForSuggestion(favorites[i]),
-                color: theme.colorScheme.primary,
-              ),
-              title: Text(favorites[i]),
-              trailing: IconButton(
-                icon: const Icon(Icons.favorite, color: Colors.red),
-                onPressed: () {
-                  preferencesModel.toggleFavorite(favorites[i]);
-                },
-                tooltip: 'Remove from favorites',
-              ),
-            ),
+            Builder(builder: (context) {
+              // favorites[i] is a Suggestion id (Phase 3); resolve to a
+              // renderable Suggestion. resolveById falls back to a
+              // synthesized stub for unknown ids so display never crashes.
+              final fav = suggestionsRepo.resolveById(favorites[i]);
+              return ListTile(
+                leading: Icon(
+                  fav.iconData,
+                  color: theme.colorScheme.primary,
+                ),
+                title: Text(fav.title),
+                subtitle: fav.description.isEmpty
+                    ? null
+                    : Text(
+                        fav.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.favorite, color: Colors.red),
+                  onPressed: () {
+                    preferencesModel.toggleFavorite(fav.id);
+                  },
+                  tooltip: 'Remove from favorites',
+                ),
+              );
+            }),
           ],
         ],
       ),
@@ -356,14 +369,17 @@ class ProfilePage extends StatelessWidget {
               if (i > 0) const Divider(height: 1),
               ListTile(
                 leading: Icon(
-                  suggestionsRepo.getIconForSuggestion(customs[i]),
+                  customs[i].iconData,
                   color: theme.colorScheme.primary,
                 ),
-                title: Text(customs[i]),
+                title: Text(customs[i].title),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () {
-                    _showRemoveCustomSuggestionDialog(context, customs[i]);
+                    _showRemoveCustomSuggestionDialog(
+                      context,
+                      customs[i].title,
+                    );
                   },
                   tooltip: 'Remove custom suggestion',
                 ),

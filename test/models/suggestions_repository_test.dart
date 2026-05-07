@@ -156,15 +156,15 @@ void main() {
     });
 
     test('disliked suggestions are excluded by feedback', () async {
-      // Pick a known catalog title and dislike it.
-      final disliked = repo.catalog
-          .firstWhere((s) =>
-              s.activityType == ActivityType.indoor &&
-              s.moods.contains(Mood.relaxed))
-          .title;
+      // Pick a known catalog suggestion and dislike it by id (Phase 3).
+      final disliked = repo.catalog.firstWhere(
+        (s) =>
+            s.activityType == ActivityType.indoor &&
+            s.moods.contains(Mood.relaxed),
+      );
 
       final feedback = FeedbackModel(await SharedPreferences.getInstance());
-      feedback.dislikeActivity(disliked);
+      feedback.dislikeActivity(disliked.id);
 
       final results = repo.getStructuredSuggestions(
         activityType: ActivityType.indoor,
@@ -174,7 +174,7 @@ void main() {
         feedback: feedback,
       );
 
-      expect(results.where((s) => s.title == disliked), isEmpty,
+      expect(results.where((s) => s.id == disliked.id), isEmpty,
           reason: 'Disliked activity must not appear');
     });
 
@@ -196,21 +196,21 @@ void main() {
     });
 
     test('favorites are lifted to the top of results', () {
-      // Find a known catalog title that matches the filter.
-      final fav = repo.catalog
-          .firstWhere((s) =>
-              s.activityType == ActivityType.indoor &&
-              s.moods.contains(Mood.creative))
-          .title;
+      // Pick a known catalog suggestion that matches the filter.
+      final fav = repo.catalog.firstWhere(
+        (s) =>
+            s.activityType == ActivityType.indoor &&
+            s.moods.contains(Mood.creative),
+      );
 
       final results = repo.getStructuredSuggestions(
         activityType: ActivityType.indoor,
         mood: Mood.creative,
         timeOfDay: TimeOfDayPref.evening,
         energyLevel: 3.0,
-        favoriteTitles: [fav],
+        favoriteIds: [fav.id],
       );
-      expect(results.first.title, fav,
+      expect(results.first.id, fav.id,
           reason: 'Favorite should be the first result');
     });
 
@@ -295,7 +295,15 @@ void main() {
 
     test('trims whitespace', () {
       repo.addCustomSuggestion('  Knitting  ');
-      expect(repo.customSuggestions.first, 'Knitting');
+      expect(repo.customSuggestions.first.title, 'Knitting');
+    });
+
+    test('synthesizes a stable id with custom- prefix', () {
+      repo.addCustomSuggestion('Pottery');
+      final entry = repo.customSuggestions.first;
+      expect(entry.id, startsWith('custom-'));
+      expect(entry.isCustom, isTrue);
+      expect(entry.title, 'Pottery');
     });
   });
 }

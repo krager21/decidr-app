@@ -123,11 +123,16 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
     setState(() {});
   }
   
-  // Record selected activity in history
+  // Record selected activity in history (keyed by Suggestion.id post-Phase-3).
   void _recordActivity() {
     if (_selectedSuggestion != null) {
-      final historyModel = Provider.of<ActivityHistoryModel>(context, listen: false);
-      historyModel.recordActivity(_selectedSuggestion!);
+      final historyModel =
+          Provider.of<ActivityHistoryModel>(context, listen: false);
+      final suggestionsRepo =
+          Provider.of<SuggestionsRepository>(context, listen: false);
+      historyModel.recordActivity(
+        suggestionsRepo.idForTitle(_selectedSuggestion!),
+      );
     }
   }
   
@@ -756,7 +761,13 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      historyModel.recordActivity(_selectedSuggestion!);
+                      final suggestionsRepo = Provider.of<SuggestionsRepository>(
+                        context,
+                        listen: false,
+                      );
+                      historyModel.recordActivity(
+                        suggestionsRepo.idForTitle(_selectedSuggestion!),
+                      );
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Added "${_selectedSuggestion!}" to history'),
@@ -796,6 +807,11 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
   void _showNotThisOptions() {
     final theme = Theme.of(context);
     final feedbackModel = Provider.of<FeedbackModel>(context, listen: false);
+    final suggestionsRepo =
+        Provider.of<SuggestionsRepository>(context, listen: false);
+    // Resolve the displayed title to the suggestion id once; feedback
+    // models are id-keyed post-Phase-3.
+    final selectedId = suggestionsRepo.idForTitle(_selectedSuggestion!);
 
     showModalBottomSheet(
       context: context,
@@ -814,7 +830,7 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
             title: const Text('Not right now'),
             subtitle: const Text('Show me less often for a while'),
             onTap: () {
-              feedbackModel.rejectActivity(_selectedSuggestion!);
+              feedbackModel.rejectActivity(selectedId);
               Navigator.pop(context);
               _spinWheel(); // Automatically respin
             },
@@ -824,7 +840,7 @@ class _WheelPageState extends State<WheelPage> with SingleTickerProviderStateMix
             title: const Text('I don\'t like this'),
             subtitle: const Text('Don\'t show me this again'),
             onTap: () {
-              feedbackModel.dislikeActivity(_selectedSuggestion!);
+              feedbackModel.dislikeActivity(selectedId);
               Navigator.pop(context);
               _spinWheel(); // Automatically respin
             },

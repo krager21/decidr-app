@@ -2,63 +2,65 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Model for tracking user feedback on activity suggestions
+/// Model for tracking user feedback on activity suggestions.
 ///
-/// Tracks rejections and dislikes to improve future suggestions by:
-/// - Reducing frequency of recently rejected activities
-/// - Completely excluding disliked activities
-/// - Applying time-based decay to rejections
+/// Tracks rejections and dislikes — both keyed by [Suggestion.id]
+/// after Phase 3 (catalog slugs or `custom-<hash>`).
+/// `MigrationService` converts pre-Phase-3 title keys to ids on
+/// first launch.
+///
+/// - Reduces frequency of recently rejected activities (time-decay)
+/// - Completely excludes disliked activities
 class FeedbackModel extends ChangeNotifier {
   final SharedPreferences _prefs;
 
-  /// Map of activity name to list of rejection timestamps
+  /// Map of suggestion id → list of rejection timestamps.
   Map<String, List<DateTime>> _rejections = {};
 
-  /// Set of activities the user has explicitly disliked
+  /// Set of suggestion ids the user has explicitly disliked.
   Set<String> _dislikes = {};
 
   FeedbackModel(this._prefs) {
     _loadFeedback();
   }
 
-  /// Get all rejected activities
+  /// All rejected suggestion ids → rejection timestamps.
   Map<String, List<DateTime>> get rejections => _rejections;
 
-  /// Get all disliked activities
+  /// All disliked suggestion ids.
   Set<String> get dislikes => _dislikes;
 
-  /// Record a "not right now" rejection for an activity
+  /// Record a "not right now" rejection for a suggestion by id.
   ///
-  /// Keeps only the last 5 rejections per activity for memory efficiency.
-  void rejectActivity(String activity) {
-    _rejections[activity] ??= [];
-    _rejections[activity]!.add(DateTime.now());
+  /// Keeps only the last 5 rejections per id for memory efficiency.
+  void rejectActivity(String id) {
+    _rejections[id] ??= [];
+    _rejections[id]!.add(DateTime.now());
 
-    // Keep only last 5 rejections per activity
-    if (_rejections[activity]!.length > 5) {
-      _rejections[activity]!.removeAt(0);
+    if (_rejections[id]!.length > 5) {
+      _rejections[id]!.removeAt(0);
     }
 
     _saveFeedback();
     notifyListeners();
-    debugPrint('Rejected activity: $activity');
+    debugPrint('Rejected activity: $id');
   }
 
-  /// Mark an activity as disliked (permanently excluded)
-  void dislikeActivity(String activity) {
-    _dislikes.add(activity);
+  /// Mark a suggestion as disliked (permanently excluded) by id.
+  void dislikeActivity(String id) {
+    _dislikes.add(id);
     _saveFeedback();
     notifyListeners();
-    debugPrint('Disliked activity: $activity');
+    debugPrint('Disliked activity: $id');
   }
 
-  /// Clear all feedback for a specific activity
-  void clearFeedback(String activity) {
-    _rejections.remove(activity);
-    _dislikes.remove(activity);
+  /// Clear all feedback for a specific suggestion id.
+  void clearFeedback(String id) {
+    _rejections.remove(id);
+    _dislikes.remove(id);
     _saveFeedback();
     notifyListeners();
-    debugPrint('Cleared feedback for: $activity');
+    debugPrint('Cleared feedback for: $id');
   }
 
   /// Clear all feedback data
@@ -70,20 +72,18 @@ class FeedbackModel extends ChangeNotifier {
     debugPrint('Cleared all feedback');
   }
 
-  /// Get weight multiplier for an activity (0.0 to 1.0)
+  /// Get the weight multiplier for a suggestion by id (0.0 to 1.0).
   ///
   /// Returns:
-  /// - 0.0 for disliked activities (completely excluded)
-  /// - 0.1-1.0 for rejected activities based on recency and frequency
-  /// - 1.0 for activities with no negative feedback
-  double getActivityWeight(String activity) {
-    // Disliked activities get 0 weight (completely excluded)
-    if (_dislikes.contains(activity)) {
+  /// - 0.0 for disliked ids (completely excluded)
+  /// - 0.1-1.0 for rejected ids based on recency and frequency
+  /// - 1.0 for ids with no negative feedback
+  double getActivityWeight(String id) {
+    if (_dislikes.contains(id)) {
       return 0.0;
     }
 
-    // Calculate recency-weighted rejection score
-    final rejectionList = _rejections[activity] ?? [];
+    final rejectionList = _rejections[id] ?? [];
     if (rejectionList.isEmpty) {
       return 1.0;
     }
@@ -109,14 +109,14 @@ class FeedbackModel extends ChangeNotifier {
     return (1.0 - penalty).clamp(0.1, 1.0);
   }
 
-  /// Check if an activity is disliked
-  bool isDisliked(String activity) {
-    return _dislikes.contains(activity);
+  /// Whether a suggestion id is disliked.
+  bool isDisliked(String id) {
+    return _dislikes.contains(id);
   }
 
-  /// Get count of rejections for an activity in the last 30 days
-  int getRecentRejectionsCount(String activity) {
-    final rejectionList = _rejections[activity] ?? [];
+  /// Count of rejections for a suggestion id in the last 30 days.
+  int getRecentRejectionsCount(String id) {
+    final rejectionList = _rejections[id] ?? [];
     final now = DateTime.now();
     return rejectionList
         .where((rejection) => now.difference(rejection).inDays < 30)

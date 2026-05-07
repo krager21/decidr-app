@@ -5,9 +5,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../utils/constants.dart';
 
-/// Model for tracking user activity history with debounced saves
+/// Model for tracking user activity history with debounced saves.
+///
+/// Keys are [Suggestion.id]s after Phase 3 (catalog slugs or
+/// `custom-<hash>`). `MigrationService` converts pre-Phase-3 title
+/// keys to ids on first launch. Use
+/// `SuggestionsRepository.resolveById(id)` to render an entry's id
+/// back to a display [Suggestion].
 class ActivityHistoryModel extends ChangeNotifier {
   final SharedPreferences _prefs;
+
+  /// Map of suggestion id → most-recent completion timestamp.
   Map<String, DateTime> activityHistory = {};
   Timer? _saveTimer;
 
@@ -64,11 +72,11 @@ class ActivityHistoryModel extends ChangeNotifier {
     _saveTimer = Timer(StorageConstants.saveDebounceDuration, _saveHistory);
   }
 
-  /// Record a completed activity
+  /// Record a completed activity by [Suggestion.id].
   ///
-  /// Adds the activity to history with current timestamp and schedules a debounced save.
-  void recordActivity(String activity) {
-    activityHistory[activity] = DateTime.now();
+  /// Stores the current timestamp and schedules a debounced save.
+  void recordActivity(String id) {
+    activityHistory[id] = DateTime.now();
     _scheduleSave();
     notifyListeners();
   }

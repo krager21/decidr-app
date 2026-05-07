@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -12,12 +13,17 @@ import 'weather_model.dart';
 /// Repository for activity suggestions.
 ///
 /// Backed by [defaultSuggestions] — a hand-curated catalog of structured
-/// [Suggestion] records. User-added custom titles live in
-/// [customSuggestions] (legacy `List<String>` storage); they are
-/// synthesized into permissive [Suggestion]s at filter time so they
-/// always survive the pipeline.
+/// [Suggestion] records. User-added custom suggestions are stored as
+/// full structured records (Phase 3) in `customSuggestions` and
+/// persisted as JSON to SharedPreferences under `customSuggestions`.
 ///
-/// Filtering pipeline (Phase 2):
+/// All cross-references (favorites, history, feedback) key off
+/// [Suggestion.id] post-Phase-3. Use [resolveById] to render an id
+/// back to a renderable [Suggestion] — it falls back to a synthesized
+/// "unknown" Suggestion for ids that don't match anything in the
+/// catalog or custom list, so display layers never crash on stale data.
+///
+/// Filtering pipeline (see [getStructuredSuggestions]):
 ///   1. Base — match `activityType` and `mood` against the catalog.
 ///   2. Optional filters — time-of-day, social context, duration,
 ///      weather. Each is applied with **graceful degradation**: if a
@@ -26,33 +32,52 @@ import 'weather_model.dart';
 ///      is skipped instead of returning a thin or empty result.
 ///   3. Feedback — disliked items are dropped, rejected items are
 ///      down-weighted (score = energyMatch × feedbackWeight).
-///   4. Custom suggestions injected as synthesized Suggestions.
+///   4. Custom suggestions injected directly from the stored list.
 ///   5. Favorites lifted to the top; remaining items ranked by score
 ///      with a shuffle within the top band for variety.
 ///   6. Take `count` (default 8), deduplicated by id.
-///
-/// Returns rich records via [getStructuredSuggestions]; the legacy
-/// string API [getSuggestions] is a thin adapter.
 class SuggestionsRepository extends ChangeNotifier {
   final SharedPreferences _prefs;
 
-  /// User-added custom suggestion titles.
+  /// User-added custom suggestions as full structured records.
   ///
-  /// Phase 2 keeps the legacy `List<String>` shape for backward
-  /// compatibility with the profile page UI; Phase 3 will migrate this
-  /// to structured `List<Suggestion>` JSON storage.
-  List<String> customSuggestions = [];
+  /// Persisted as a JSON list under `customSuggestions`. Phase 3
+  /// migrates the legacy `List<String>` storage shape on first launch
+  /// (see `MigrationService`).
+  List<Suggestion> customSuggestions = [];
 
   SuggestionsRepository(this._prefs);
 
   /// Load custom suggestions from SharedPreferences.
+  ///
+  /// Expects v2 format (JSON array of [Suggestion]); the migration
+  /// service will have converted any v1 string-list payload before
+  /// this method is called.
   Future<void> loadSuggestions() async {
-    customSuggestions = _prefs.getStringList('customSuggestions') ?? [];
+    final raw = _prefs.getString('customSuggestions');
+    if (raw == null || raw.isEmpty) {
+      customSuggestions = [];
+      notifyListeners();
+      return;
+    }
+    try {
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      customSuggestions = decoded
+          .map((e) => Suggestion.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on FormatException catch (e) {
+      debugPrint('customSuggestions JSON malformed: $e — resetting');
+      customSuggestions = [];
+    }
     notifyListeners();
   }
 
   /// The shipped catalog (immutable view).
   List<Suggestion> get catalog => List.unmodifiable(defaultSuggestions);
+
+  /// Convenience: the titles of custom suggestions, in storage order.
+  List<String> get customSuggestionTitles =>
+      customSuggestions.map((s) => s.title).toList();
 
   /// Look up a catalog suggestion by stable id. Returns `null` if not found.
   Suggestion? suggestionById(String id) {
@@ -64,8 +89,8 @@ class SuggestionsRepository extends ChangeNotifier {
 
   /// Look up a catalog suggestion by display title (case-insensitive).
   ///
-  /// Used by the upcoming Phase-3 persistence migration to map legacy
-  /// title-keyed favorites/history/feedback to their structured equivalents.
+  /// Searches **catalog only** — for a search across both catalog and
+  /// the user's custom list, use [findByTitle].
   Suggestion? suggestionByTitle(String title) {
     final lower = title.toLowerCase();
     for (final s in defaultSuggestions) {
@@ -74,13 +99,55 @@ class SuggestionsRepository extends ChangeNotifier {
     return null;
   }
 
+  /// Look up a [Suggestion] by display title (case-insensitive),
+  /// across both the catalog and the user's custom list. Returns
+  /// `null` if no match is found.
+  ///
+  /// Used by the legacy string-API call sites (wheel page) to convert
+  /// a displayed title back to a [Suggestion.id] for history and
+  /// feedback recording.
+  Suggestion? findByTitle(String title) {
+    final fromCatalog = suggestionByTitle(title);
+    if (fromCatalog != null) return fromCatalog;
+    final lower = title.toLowerCase();
+    for (final s in customSuggestions) {
+      if (s.title.toLowerCase() == lower) return s;
+    }
+    return null;
+  }
+
+  /// Convenience: resolve a title to its [Suggestion.id], or fall back
+  /// to using the title itself as the id when nothing matches.
+  ///
+  /// The fallback ensures legacy code paths can pass a title-as-id to
+  /// history/feedback without losing data when an entry is missing.
+  String idForTitle(String title) => findByTitle(title)?.id ?? title;
+
+  /// Resolve an id to a renderable [Suggestion].
+  ///
+  /// Tries the catalog first, then the user's custom list. If neither
+  /// matches (e.g. an id from a stale persisted reference), returns a
+  /// synthesized "unknown" Suggestion using the id itself as the title
+  /// so display layers degrade gracefully instead of crashing.
+  Suggestion resolveById(String id) {
+    final fromCatalog = suggestionById(id);
+    if (fromCatalog != null) return fromCatalog;
+    for (final s in customSuggestions) {
+      if (s.id == id) return s;
+    }
+    return _synthesizeFallback(id);
+  }
+
   // ──────────────────────────────────────────────────────────────
-  // Custom suggestion CRUD (legacy string storage)
+  // Custom suggestion CRUD
   // ──────────────────────────────────────────────────────────────
 
-  /// Persist [customSuggestions] to SharedPreferences.
+  /// Persist [customSuggestions] to SharedPreferences as a JSON list.
   Future<void> saveCustomSuggestions() async {
-    await _prefs.setStringList('customSuggestions', customSuggestions);
+    await _prefs.setString(
+      'customSuggestions',
+      jsonEncode(customSuggestions.map((s) => s.toJson()).toList()),
+    );
     notifyListeners();
   }
 
@@ -88,8 +155,13 @@ class SuggestionsRepository extends ChangeNotifier {
   ///
   /// Trims whitespace, enforces a max length of
   /// [SuggestionConstants.customSuggestionMaxLength], deduplicates
-  /// case-insensitively, and caps the total count at
+  /// case-insensitively against both the catalog and the user's
+  /// existing customs, and caps the total count at
   /// [SuggestionConstants.customSuggestionMaxCount].
+  ///
+  /// On success a [Suggestion] is synthesized with a stable
+  /// `custom-<hash>` id and permissive defaults (any time, any social
+  /// context, hybrid activity, all moods) so it survives every filter.
   ///
   /// Returns `true` if the suggestion was added, `false` if it was
   /// rejected (empty, too long, duplicate, or list is full).
@@ -104,29 +176,41 @@ class SuggestionsRepository extends ChangeNotifier {
       return false;
     }
     final lower = trimmed.toLowerCase();
-    if (customSuggestions.any((s) => s.toLowerCase() == lower)) return false;
+    if (customSuggestions.any((s) => s.title.toLowerCase() == lower)) {
+      return false;
+    }
+    if (suggestionByTitle(trimmed) != null) {
+      return false; // already in the catalog
+    }
 
-    customSuggestions.add(trimmed);
+    final usedIds = <String>{
+      ...defaultSuggestions.map((s) => s.id),
+      ...customSuggestions.map((s) => s.id),
+    };
+    final id = _customIdFor(trimmed, usedIds);
+    customSuggestions.add(_buildCustom(trimmed, id));
     saveCustomSuggestions();
     return true;
   }
 
-  /// Remove a custom suggestion by exact title match.
-  void removeCustomSuggestion(String suggestion) {
-    if (customSuggestions.contains(suggestion)) {
-      customSuggestions.remove(suggestion);
+  /// Remove a custom suggestion by id or by exact title match.
+  void removeCustomSuggestion(String idOrTitle) {
+    final lower = idOrTitle.toLowerCase();
+    final before = customSuggestions.length;
+    customSuggestions.removeWhere(
+      (s) => s.id == idOrTitle || s.title.toLowerCase() == lower,
+    );
+    if (customSuggestions.length != before) {
       saveCustomSuggestions();
     }
   }
 
-  /// Resolve an icon for a suggestion title.
+  /// Resolve an icon for a suggestion title (legacy wheel painter shim).
   ///
-  /// Looks up the title in the catalog first (icons are first-class
-  /// fields on [Suggestion]). Falls back to a small keyword-based
-  /// heuristic for custom user-added titles that aren't in the catalog.
-  ///
-  /// Used by the legacy wheel painter; new code should resolve via
-  /// `Suggestion.iconData` directly.
+  /// Looks up the title in the catalog first; falls back to a small
+  /// keyword-based heuristic for titles that aren't in the catalog
+  /// (e.g. one-off display values from stale persisted state).
+  /// New code should resolve via `Suggestion.iconData` directly.
   IconData getIconForSuggestion(String suggestion) {
     final fromCatalog = suggestionByTitle(suggestion);
     if (fromCatalog != null) return fromCatalog.iconData;
@@ -185,9 +269,9 @@ class SuggestionsRepository extends ChangeNotifier {
 
   /// Get matching suggestions as structured [Suggestion] records.
   ///
-  /// This is the new typed entry point — see the class docs for the full
-  /// pipeline. The legacy [getSuggestions] string API is a thin adapter
-  /// that calls this method and projects to titles.
+  /// `favoriteIds` and the keys used for feedback lookup are
+  /// [Suggestion.id]s — Phase 3 unified all cross-reference keys.
+  /// The legacy [getSuggestions] string API is a thin adapter.
   List<Suggestion> getStructuredSuggestions({
     required ActivityType activityType,
     required Mood mood,
@@ -199,7 +283,7 @@ class SuggestionsRepository extends ChangeNotifier {
     FeedbackModel? feedback,
     bool includeCustom = true,
     bool includeFavorites = true,
-    List<String> favoriteTitles = const [],
+    List<String> favoriteIds = const [],
     int count = SuggestionConstants.defaultSuggestionsCount,
   }) {
     // Stage 1: base filter — activity type + mood.
@@ -239,7 +323,7 @@ class SuggestionsRepository extends ChangeNotifier {
     // Stage 3: drop disliked items (feedback weight 0.0).
     if (feedback != null) {
       pool = pool
-          .where((s) => feedback.getActivityWeight(s.title) > 0.0)
+          .where((s) => feedback.getActivityWeight(s.id) > 0.0)
           .toList();
     }
 
@@ -248,29 +332,28 @@ class SuggestionsRepository extends ChangeNotifier {
     for (final s in pool) {
       final delta = (s.energyLevel - energyLevel).abs();
       final energyScore = 1.0 - (delta / 4.0); // 1.0 = perfect match
-      final fbWeight = feedback?.getActivityWeight(s.title) ?? 1.0;
+      final fbWeight = feedback?.getActivityWeight(s.id) ?? 1.0;
       scored.add(_ScoredSuggestion(s, energyScore * fbWeight));
     }
 
-    // Stage 5: inject custom suggestions as permissive synthesized records.
-    if (includeCustom && customSuggestions.isNotEmpty) {
-      for (final title in customSuggestions) {
-        final synth = _synthesizeCustom(
-          title,
-          activityType: activityType,
-          mood: mood,
-        );
-        scored.add(_ScoredSuggestion(synth, 1.0));
+    // Stage 5: inject the user's custom suggestions verbatim.
+    if (includeCustom) {
+      for (final s in customSuggestions) {
+        // Custom suggestions are permissive by construction, but still
+        // honor explicit dislike feedback if present.
+        if (feedback != null && feedback.getActivityWeight(s.id) <= 0.0) {
+          continue;
+        }
+        scored.add(_ScoredSuggestion(s, 1.0));
       }
     }
 
     // Stage 6: favorites first, then top-by-score with intra-band shuffle.
-    final favSet = favoriteTitles.map((f) => f.toLowerCase()).toSet();
+    final favSet = favoriteIds.toSet();
     final favorites = <Suggestion>[];
     final rest = <_ScoredSuggestion>[];
     for (final entry in scored) {
-      if (includeFavorites &&
-          favSet.contains(entry.suggestion.title.toLowerCase())) {
+      if (includeFavorites && favSet.contains(entry.suggestion.id)) {
         favorites.add(entry.suggestion);
       } else {
         rest.add(entry);
@@ -278,8 +361,6 @@ class SuggestionsRepository extends ChangeNotifier {
     }
     rest.sort((a, b) => b.score.compareTo(a.score));
 
-    // Take 2× count from the top band, shuffle for variety, then deduplicate
-    // and trim to count. Favorites bypass the shuffle so they're consistent.
     final topBand = rest.take(count * 2).map((s) => s.suggestion).toList()
       ..shuffle(Random());
 
@@ -290,10 +371,10 @@ class SuggestionsRepository extends ChangeNotifier {
 
   /// Get matching suggestion **titles** — legacy string API.
   ///
-  /// Internally calls [getStructuredSuggestions] and projects to
-  /// [Suggestion.title]. String parameters are converted to enum
-  /// values; an unrecognized `activity`, `mood`, or `timeOfDay`
-  /// returns an empty list.
+  /// `favorites` is expected to be a list of [Suggestion.id]s after
+  /// Phase 3 (the migration converts older title-based favorites to
+  /// ids automatically). Internally calls [getStructuredSuggestions]
+  /// and projects to titles.
   List<String> getSuggestions({
     required String activity,
     required String mood,
@@ -334,7 +415,7 @@ class SuggestionsRepository extends ChangeNotifier {
       feedback: feedback,
       includeCustom: includeCustom,
       includeFavorites: includeFavorites,
-      favoriteTitles: favorites,
+      favoriteIds: favorites,
     );
 
     return structured.map((s) => s.title).toList();
@@ -391,27 +472,58 @@ class SuggestionsRepository extends ChangeNotifier {
     return true;
   }
 
-  /// Build a permissive synthetic [Suggestion] for a user-supplied
-  /// custom title. Uses the requested filter context so it always
-  /// passes the base filter and reaches the user.
-  Suggestion _synthesizeCustom(
-    String title, {
-    required ActivityType activityType,
-    required Mood mood,
-  }) {
+  /// Generate a stable id for a custom title, with collision suffixing.
+  ///
+  /// Mirrors the algorithm in `MigrationService` so ids assigned during
+  /// migration match ids assigned at runtime for the same title.
+  String _customIdFor(String title, Set<String> usedIds) {
+    final base =
+        'custom-${title.hashCode.toUnsigned(32).toRadixString(16)}';
+    if (!usedIds.contains(base)) return base;
+    var i = 2;
+    while (usedIds.contains('$base-$i')) {
+      i++;
+    }
+    return '$base-$i';
+  }
+
+  /// Build a new custom [Suggestion] with permissive defaults.
+  Suggestion _buildCustom(String title, String id) {
     return Suggestion(
-      id: 'custom-${title.hashCode.toUnsigned(32).toRadixString(16)}',
+      id: id,
       title: title,
       description: '',
       iconName: 'local_activity_outlined',
-      activityType: activityType,
-      moods: [mood],
-      social: SocialContext.values,
+      activityType: ActivityType.hybrid,
+      moods: const [Mood.relaxed, Mood.productive, Mood.creative, Mood.social],
+      social: const [
+        SocialContext.solo,
+        SocialContext.partner,
+        SocialContext.smallGroup,
+        SocialContext.largeGroup,
+      ],
       timeOfDay: const [],
       energyLevel: SuggestionConstants.energyLevelDefault,
       durationMinutes: 30,
       weather: WeatherTolerance.any,
       tags: const ['custom'],
+      isCustom: true,
+    );
+  }
+
+  /// Synthesize a placeholder [Suggestion] for an id we can't resolve.
+  /// Used by [resolveById] so display layers never crash on stale data.
+  Suggestion _synthesizeFallback(String id) {
+    return Suggestion(
+      id: id,
+      title: id,
+      description: '',
+      iconName: 'local_activity_outlined',
+      activityType: ActivityType.hybrid,
+      moods: const [Mood.relaxed],
+      social: const [SocialContext.solo],
+      energyLevel: SuggestionConstants.energyLevelDefault,
+      durationMinutes: 30,
       isCustom: true,
     );
   }

@@ -31,12 +31,18 @@ class HistoryPage extends StatelessWidget {
     );
   }
   
-  // Build a history item
-  Widget _buildHistoryItem(BuildContext context, MapEntry<String, DateTime> activity) {
+  // Build a history item.
+  //
+  // `activity.key` is a Suggestion.id (post-Phase-3); resolve to a
+  // renderable Suggestion for the displayed title and icon.
+  Widget _buildHistoryItem(
+    BuildContext context,
+    MapEntry<String, DateTime> activity,
+  ) {
     final theme = Theme.of(context);
     final suggestionsRepo = Provider.of<SuggestionsRepository>(context);
-    final icon = suggestionsRepo.getIconForSuggestion(activity.key);
-    
+    final suggestion = suggestionsRepo.resolveById(activity.key);
+
     // Format the date
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -45,19 +51,21 @@ class HistoryPage extends StatelessWidget {
       activity.value.month,
       activity.value.day,
     );
-    
+
     String dateText;
     if (activityDate == today) {
       dateText = 'Today';
     } else if (activityDate == today.subtract(const Duration(days: 1))) {
       dateText = 'Yesterday';
     } else {
-      dateText = '${activity.value.day}/${activity.value.month}/${activity.value.year}';
+      dateText =
+          '${activity.value.day}/${activity.value.month}/${activity.value.year}';
     }
-    
+
     // Format the time
-    final timeText = '${activity.value.hour.toString().padLeft(2, '0')}:${activity.value.minute.toString().padLeft(2, '0')}';
-    
+    final timeText =
+        '${activity.value.hour.toString().padLeft(2, '0')}:${activity.value.minute.toString().padLeft(2, '0')}';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
@@ -69,12 +77,12 @@ class HistoryPage extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           child: Icon(
-            icon,
+            suggestion.iconData,
             color: theme.colorScheme.onSurfaceVariant,
             size: 20,
           ),
         ),
-        title: Text(activity.key),
+        title: Text(suggestion.title),
         subtitle: Text('$dateText at $timeText'),
         trailing: const Icon(Icons.check_circle, color: Colors.green),
       ),

@@ -81,7 +81,13 @@ class PreferencesModel extends ChangeNotifier {
   /// Selected color theme for the wheel (rainbow, pastels, etc.)
   String colorTheme = 'rainbow';
 
-  /// List of activities marked as favorites by the user
+  /// List of suggestion **ids** marked as favorites by the user.
+  ///
+  /// Post-Phase-3, values are stable [Suggestion] ids (catalog slugs
+  /// or `custom-<hash>` for user-added entries). Pre-Phase-3 the list
+  /// held titles; `MigrationService` converts on first launch.
+  /// Use `SuggestionsRepository.resolveById(id)` to render an id back
+  /// to a display [Suggestion].
   List<String> favoriteActivities = [];
 
   /// Available activity type options
@@ -224,25 +230,24 @@ class PreferencesModel extends ChangeNotifier {
     setPreference(preferenceKey, value);
   }
   
-  /// Toggle an activity's favorite status
+  /// Toggle an activity's favorite status by [Suggestion.id].
   ///
-  /// Adds the activity to favorites if not present, removes it if already favorited.
-  /// Automatically saves and notifies listeners.
-  void toggleFavorite(String activity) {
-    if (favoriteActivities.contains(activity)) {
-      favoriteActivities.remove(activity);
+  /// Post-Phase-3, callers pass the id of the suggestion (catalog
+  /// slug or `custom-<hash>`), not its title. Adds it to favorites if
+  /// not present, removes it otherwise. Saves and notifies listeners.
+  void toggleFavorite(String id) {
+    if (favoriteActivities.contains(id)) {
+      favoriteActivities.remove(id);
     } else {
-      favoriteActivities.add(activity);
+      favoriteActivities.add(id);
     }
     savePreferences();
     notifyListeners();
   }
 
-  /// Check if an activity is in the favorites list
-  ///
-  /// Returns true if the activity is favorited, false otherwise.
-  bool isFavorite(String activity) {
-    return favoriteActivities.contains(activity);
+  /// Whether the suggestion with the given [id] is a favorite.
+  bool isFavorite(String id) {
+    return favoriteActivities.contains(id);
   }
 
   /// Reset questionnaire preferences to default values
