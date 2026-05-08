@@ -12,6 +12,7 @@ import '../models/suggestion.dart';
 import '../models/suggestions_repository.dart';
 import '../services/weather_service.dart';
 import '../widgets/decision_card.dart';
+import 'questionnaire_page.dart';
 
 /// Stages of the card-reveal animation flow.
 enum _RevealStage {
@@ -397,7 +398,17 @@ class _CardRevealPageState extends State<CardRevealPage>
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Decide')),
+      appBar: AppBar(
+        title: const Text('Decide'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Edit preferences',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const QuestionnairePage()),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
