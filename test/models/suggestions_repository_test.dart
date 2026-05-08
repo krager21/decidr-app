@@ -182,12 +182,15 @@ void main() {
         () async {
       repo.addCustomSuggestion('Build a Lego castle');
 
+      // Request more than the pool so the custom entry is guaranteed
+      // to appear (the post-Phase-5b catalog has hundreds of entries
+      // and the top-N bucket would otherwise sample-out the custom).
       final results = repo.getStructuredSuggestions(
         activityType: ActivityType.indoor,
         mood: Mood.creative,
         timeOfDay: TimeOfDayPref.evening,
         energyLevel: 3.0,
-        count: 20,
+        count: 500,
       );
 
       expect(results.where((s) => s.title == 'Build a Lego castle'),

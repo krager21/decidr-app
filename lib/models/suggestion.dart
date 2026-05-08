@@ -480,4 +480,9 @@ const Map<String, IconData> _materialIcons = {
   'track_changes': Icons.track_changes,
   'waves': Icons.waves,
   'iron': Icons.iron,
+  // Phase 5b — weird tail additions
+  'shuffle': Icons.shuffle,
+  'dark_mode': Icons.dark_mode,
+  'auto_awesome': Icons.auto_awesome,
+  'sentiment_satisfied': Icons.sentiment_satisfied,
 };

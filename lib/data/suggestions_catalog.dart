@@ -1,14 +1,29 @@
 import '../models/suggestion.dart';
+import 'weird_tail.dart';
 
 /// The shipped catalog of activity suggestions.
 ///
-/// Each entry is an immutable [Suggestion] with a stable [Suggestion.id] used
-/// as the cross-reference key for favorites, history, and feedback.
+/// Composed of two lists: [_curatedSuggestions] (the hand-tuned core)
+/// and [weirdTail] (the eccentric long tail with high `weirdness`
+/// values). Consumers see them as one flat [defaultSuggestions]; the
+/// repository's filter pipeline doesn't care which list an entry came
+/// from.
 ///
-/// Add entries by appending to [defaultSuggestions]. Keep IDs stable — once a
-/// suggestion has been favorited or rated by users, changing its ID
-/// effectively orphans that data.
-const List<Suggestion> defaultSuggestions = [
+/// Each entry is an immutable [Suggestion] with a stable [Suggestion.id]
+/// used as the cross-reference key for favorites, history, and feedback.
+///
+/// Add curated entries by appending to [_curatedSuggestions]. Add weird
+/// entries by appending to `weirdTail` in `weird_tail.dart`. Keep IDs
+/// stable — once a suggestion has been favorited or rated by users,
+/// changing its ID effectively orphans that data.
+final List<Suggestion> defaultSuggestions = [
+  ..._curatedSuggestions,
+  ...weirdTail,
+];
+
+/// The hand-curated core catalog. See [defaultSuggestions] for the
+/// runtime-visible combined list.
+const List<Suggestion> _curatedSuggestions = [
   // ──────────────────────────────────────────────────────────────
   // INDOOR · RELAXED
   // ──────────────────────────────────────────────────────────────
