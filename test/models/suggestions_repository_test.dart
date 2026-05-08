@@ -262,6 +262,58 @@ void main() {
               'got $highMean');
     });
 
+    test('excludeIds drops listed entries when pool has slack', () {
+      // Pick a few catalog ids from the indoor/relaxed bucket and
+      // exclude them. With a healthy pool, none of the excluded
+      // should appear in the results.
+      final candidates = repo.catalog
+          .where((s) =>
+              s.activityType == ActivityType.indoor &&
+              s.moods.contains(Mood.relaxed))
+          .take(3)
+          .map((s) => s.id)
+          .toSet();
+
+      final results = repo.getStructuredSuggestions(
+        activityType: ActivityType.indoor,
+        mood: Mood.relaxed,
+        timeOfDay: TimeOfDayPref.evening,
+        energyLevel: 2.0,
+        excludeIds: candidates,
+        count: 8,
+      );
+
+      for (final s in results) {
+        expect(candidates.contains(s.id), isFalse,
+            reason: '${s.id} was supposed to be excluded');
+      }
+    });
+
+    test('excludeIds gracefully degrades when it would empty the pool',
+        () {
+      // Excluding the entire bucket should fall back rather than
+      // returning empty — graceful degradation guarantees the user
+      // always gets *something* dealt.
+      final allInBucket = repo.catalog
+          .where((s) =>
+              s.activityType == ActivityType.indoor &&
+              s.moods.contains(Mood.relaxed))
+          .map((s) => s.id)
+          .toSet();
+
+      final results = repo.getStructuredSuggestions(
+        activityType: ActivityType.indoor,
+        mood: Mood.relaxed,
+        timeOfDay: TimeOfDayPref.evening,
+        energyLevel: 2.0,
+        excludeIds: allInBucket,
+        count: 8,
+      );
+
+      expect(results, isNotEmpty,
+          reason: 'Pool exhaustion should fall back to allowing repeats');
+    });
+
     test('count caps the result length', () {
       final results = repo.getStructuredSuggestions(
         activityType: ActivityType.indoor,

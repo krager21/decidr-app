@@ -125,6 +125,14 @@ class _CardRevealPageState extends State<CardRevealPage>
   /// Slot 1 (middle) is always the last to be added.
   final Set<int> _revealedSlots = {};
 
+  /// Suggestion ids dealt in this session (persists across "Deal again"
+  /// taps but resets when the user leaves the tab — the page is
+  /// disposed when MainTabsPage swaps it out, so the set naturally
+  /// clears). Passed to `getStructuredSuggestions(excludeIds:)` to
+  /// keep deals varied. The repository falls back to allowing repeats
+  /// once exclusion would leave the pool too thin.
+  final Set<String> _shownInSession = {};
+
   // Timers driving the reveal sequence.
   final List<Timer?> _flipTimers = [null, null, null];
   Timer? _settleTimer;
@@ -202,6 +210,7 @@ class _CardRevealPageState extends State<CardRevealPage>
       feedback: feedback,
       favoriteIds: prefs.favoriteActivities,
       weirdnessTolerance: prefs.weirdnessTolerance,
+      excludeIds: _shownInSession,
       count: 9,
     );
 
@@ -241,6 +250,11 @@ class _CardRevealPageState extends State<CardRevealPage>
       _slotSuggestions = [pool[0], pool[1], pool[2]];
       _flanking = [pool[0], pool[2]];
       _revealedSlots.clear();
+      // Record the three dealt suggestions so they're excluded from
+      // the next "Deal again" — until the bucket is exhausted, in
+      // which case the repository's graceful-degradation fallback
+      // re-allows repeats.
+      _shownInSession.addAll([pool[0].id, pool[1].id, pool[2].id]);
     });
 
     // Stage 0: considering. Filter medallions fade in, dots pulse.

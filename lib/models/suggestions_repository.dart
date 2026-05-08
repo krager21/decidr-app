@@ -293,12 +293,31 @@ class SuggestionsRepository extends ChangeNotifier {
     /// not a ceiling — at 0.0 mainstream wins, at 1.0 weird wins, at 0.5
     /// novelty wins (and both extremes are softly penalised).
     double weirdnessTolerance = 0.3,
+
+    /// Suggestion ids to filter out — typically the ones already
+    /// shown in the current session, to keep deals varied. The
+    /// exclusion goes through the same graceful-degradation pattern
+    /// as other optional filters: if it would shrink the pool below
+    /// [SuggestionConstants.minFilteredSuggestionsCount], the filter
+    /// is skipped and repeats are allowed (rather than returning
+    /// empty results once the pool is exhausted).
+    Set<String> excludeIds = const {},
     int count = SuggestionConstants.defaultSuggestionsCount,
   }) {
     // Stage 1: base filter — activity type + mood.
     var pool = catalog
         .where((s) => s.activityType == activityType && s.moods.contains(mood))
         .toList();
+
+    // Stage 1b: exclude ids the caller has already seen this session.
+    // Graceful degradation: if exclusion would leave too few candidates,
+    // the filter is skipped — better to repeat than to deal a thin set.
+    if (excludeIds.isNotEmpty) {
+      pool = _applyOrSkip(
+        pool,
+        (p) => p.where((s) => !excludeIds.contains(s.id)).toList(),
+      );
+    }
 
     // Stage 2: optional filters with graceful degradation.
     pool = _applyOrSkip(
