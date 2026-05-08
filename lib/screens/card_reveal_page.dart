@@ -53,8 +53,8 @@ class _CardRevealPageState extends State<CardRevealPage>
   // ─── animation timing knobs ───────────────────────────────────
   //
   // Full sequence:
-  //   0–500ms       "Considering" — filter medallions fade in (staggered)
-  //   +600ms more   Dots pulse — the "thinking" beat
+  //   0–700ms       "Considering" — filter medallions fade in (staggered)
+  //   +1200ms more  Dots pulse — the "thinking" beat
   //   0–700ms       Cards deal in from above (staggered: L → R → M)
   //   +250ms        Settle breath
   //   +100ms        Card 0 (left) flips up   · light haptic
@@ -62,9 +62,9 @@ class _CardRevealPageState extends State<CardRevealPage>
   //   +650ms more   Card 1 (middle) flips up · medium haptic — chosen
   //   +850ms more   Settle: chosen scales+glows, description slides up
   //
-  // Total ~4.4s. Each timing knob can be tuned independently.
-  static const _consideringRevealDuration = Duration(milliseconds: 500);
-  static const _consideringPulseDuration = Duration(milliseconds: 600);
+  // Total ~5.2s. Each timing knob can be tuned independently.
+  static const _consideringRevealDuration = Duration(milliseconds: 700);
+  static const _consideringPulseDuration = Duration(milliseconds: 1200);
   static const _dealInDuration = Duration(milliseconds: 700);
   static const _dealInBreath = Duration(milliseconds: 250);
 
@@ -768,11 +768,13 @@ class _CardRevealPageState extends State<CardRevealPage>
   }
 
   /// Reserves a fixed-height slot above the cards row that hosts the
-  /// thinking chain. The chain is invisible during idle/empty/settled
-  /// (so the slot is empty) and animated during considering/dealing.
+  /// thinking chain. The chain is hidden in idle/empty (haven't dealt
+  /// yet), pulses during considering, and stays visible-but-quiet
+  /// during dealing/settled as a context anchor for the result.
   Widget _buildThinkingChainSlot(PreferencesModel prefs) {
     final showChain = _stage == _RevealStage.considering ||
-        _stage == _RevealStage.dealing;
+        _stage == _RevealStage.dealing ||
+        _stage == _RevealStage.settled;
     final pulsing = _stage == _RevealStage.considering;
 
     return SizedBox(
