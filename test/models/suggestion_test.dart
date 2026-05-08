@@ -70,8 +70,34 @@ void main() {
         expect(restored.weather, s.weather);
         expect(restored.tags, s.tags);
         expect(restored.interests, s.interests);
+        expect(restored.weirdness, s.weirdness);
         expect(restored.isCustom, s.isCustom);
       }
+    });
+
+    test('weirdness is within 0.0..1.0 for every entry', () {
+      for (final s in defaultSuggestions) {
+        expect(s.weirdness, inInclusiveRange(0.0, 1.0),
+            reason: '${s.id} has out-of-range weirdness ${s.weirdness}');
+      }
+    });
+
+    test('Suggestion JSON without weirdness defaults to 0.2', () {
+      // Backward-compat: older persisted JSON pre-dates the weirdness
+      // field. Loading should not throw and should default to 0.2.
+      final legacyJson = {
+        'id': 'old-entry',
+        'title': 'Old entry',
+        'description': '',
+        'iconName': 'menu_book',
+        'activityType': 'indoor',
+        'moods': ['relaxed'],
+        'social': ['solo'],
+        'energyLevel': 2.0,
+        'durationMinutes': 30,
+      };
+      final s = Suggestion.fromJson(legacyJson);
+      expect(s.weirdness, 0.2);
     });
 
     test('every interest used by the catalog is in Interests.all', () {

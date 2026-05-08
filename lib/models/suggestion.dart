@@ -184,6 +184,21 @@ class Suggestion {
   /// produce suggestions with `interests: [Interests.music]`).
   final List<String> interests;
 
+  /// How off-the-wall this activity is, on a 0.0 → 1.0 scale.
+  ///
+  /// 0.0 = mainstream, expected ("take a walk", "read a book").
+  /// 0.5 = mildly unusual ("learn morse code", "make a stop-motion video").
+  /// 1.0 = genuinely eccentric ("eat dinner in complete darkness",
+  ///       "spend an hour pretending you're a tourist in your own town").
+  ///
+  /// Defaults to 0.2 so existing entries read as "slightly novel" rather
+  /// than dead-mainstream — they are curated, after all.
+  ///
+  /// The future "weirdness slider" in preferences will map a user's
+  /// tolerance against this field via a distance-based affinity: at
+  /// tolerance 0 mainstream wins, at tolerance 1 weird wins.
+  final double weirdness;
+
   /// True if user-added at runtime (not part of the shipped catalog).
   final bool isCustom;
 
@@ -201,6 +216,7 @@ class Suggestion {
     this.weather = WeatherTolerance.any,
     this.tags = const [],
     this.interests = const [],
+    this.weirdness = 0.2,
     this.isCustom = false,
   });
 
@@ -223,6 +239,7 @@ class Suggestion {
     WeatherTolerance? weather,
     List<String>? tags,
     List<String>? interests,
+    double? weirdness,
     bool? isCustom,
   }) {
     return Suggestion(
@@ -239,6 +256,7 @@ class Suggestion {
       weather: weather ?? this.weather,
       tags: tags ?? this.tags,
       interests: interests ?? this.interests,
+      weirdness: weirdness ?? this.weirdness,
       isCustom: isCustom ?? this.isCustom,
     );
   }
@@ -257,6 +275,7 @@ class Suggestion {
         'weather': weather.name,
         'tags': tags,
         'interests': interests,
+        'weirdness': weirdness,
         'isCustom': isCustom,
       };
 
@@ -289,6 +308,9 @@ class Suggestion {
       interests: (json['interests'] as List<dynamic>? ?? [])
           .map((i) => i as String)
           .toList(),
+      // `weirdness` is a Phase-5b addition; defaults to 0.2 if absent
+      // so legacy JSON loads without breaking.
+      weirdness: (json['weirdness'] as num?)?.toDouble() ?? 0.2,
       isCustom: json['isCustom'] as bool? ?? false,
     );
   }
