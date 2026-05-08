@@ -286,6 +286,13 @@ class SuggestionsRepository extends ChangeNotifier {
     bool includeCustom = true,
     bool includeFavorites = true,
     List<String> favoriteIds = const [],
+
+    /// User's appetite for off-the-wall suggestions, 0.0 → 1.0.
+    /// Multiplied into the score via distance-based affinity:
+    /// `1 − |suggestion.weirdness − tolerance|`. The slider is a *target*,
+    /// not a ceiling — at 0.0 mainstream wins, at 1.0 weird wins, at 0.5
+    /// novelty wins (and both extremes are softly penalised).
+    double weirdnessTolerance = 0.3,
     int count = SuggestionConstants.defaultSuggestionsCount,
   }) {
     // Stage 1: base filter — activity type + mood.
@@ -329,13 +336,20 @@ class SuggestionsRepository extends ChangeNotifier {
           .toList();
     }
 
-    // Stage 4: score by energy proximity × feedback weight.
+    // Stage 4: score by energy proximity × feedback weight × weirdness affinity.
+    // Weirdness affinity = 1 − |s.weirdness − tolerance|, clamped to [0,1].
+    // At tolerance 0 mainstream wins; at 1, weird wins.
     final scored = <_ScoredSuggestion>[];
     for (final s in pool) {
       final delta = (s.energyLevel - energyLevel).abs();
       final energyScore = 1.0 - (delta / 4.0); // 1.0 = perfect match
       final fbWeight = feedback?.getActivityWeight(s.id) ?? 1.0;
-      scored.add(_ScoredSuggestion(s, energyScore * fbWeight));
+      final weirdAffinity =
+          (1.0 - (s.weirdness - weirdnessTolerance).abs()).clamp(0.0, 1.0);
+      scored.add(_ScoredSuggestion(
+        s,
+        energyScore * fbWeight * weirdAffinity,
+      ));
     }
 
     // Stage 5: inject the user's custom suggestions verbatim.
@@ -346,6 +360,8 @@ class SuggestionsRepository extends ChangeNotifier {
         if (feedback != null && feedback.getActivityWeight(s.id) <= 0.0) {
           continue;
         }
+        // Custom entries get a generous score so user-added stuff
+        // surfaces regardless of weirdness tolerance.
         scored.add(_ScoredSuggestion(s, 1.0));
       }
     }

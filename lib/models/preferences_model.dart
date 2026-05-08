@@ -18,7 +18,8 @@ enum PreferenceKey {
   useDarkMode('useDarkMode'),
   useSystemTheme('useSystemTheme'),
   enableHaptics('enableHaptics'),
-  colorTheme('colorTheme');
+  colorTheme('colorTheme'),
+  weirdnessTolerance('weirdnessTolerance');
 
   /// The SharedPreferences key used to persist this preference.
   final String storageKey;
@@ -84,6 +85,18 @@ class PreferencesModel extends ChangeNotifier {
   /// leaving it in place.
   String colorTheme = 'rainbow';
 
+  /// User's appetite for off-the-wall suggestions, on a 0.0 → 1.0 scale.
+  ///
+  ///   0.0  comfort food only — mainstream entries dominate
+  ///   0.5  balanced — slightly novel sweet spot
+  ///   1.0  bring on the chaos — eccentric entries dominate
+  ///
+  /// Multiplied into the suggestion score via a distance-based affinity
+  /// (`1 − |suggestion.weirdness − tolerance|`) so the slider acts as a
+  /// *target* weirdness, not a ceiling. Defaults to 0.3 — mostly
+  /// comfortable with a touch of novelty.
+  double weirdnessTolerance = 0.3;
+
   /// List of suggestion **ids** marked as favorites by the user.
   ///
   /// Post-Phase-3, values are stable [Suggestion] ids (catalog slugs
@@ -144,6 +157,8 @@ class PreferencesModel extends ChangeNotifier {
     useSystemTheme = _prefs.getBool('useSystemTheme') ?? true;
     enableHaptics = _prefs.getBool('enableHaptics') ?? true;
     colorTheme = _prefs.getString('colorTheme') ?? 'rainbow';
+    weirdnessTolerance =
+        _prefs.getDouble('weirdnessTolerance')?.clamp(0.0, 1.0) ?? 0.3;
     favoriteActivities = _prefs.getStringList('favoriteActivities') ?? [];
     notifyListeners();
   }
@@ -173,6 +188,7 @@ class PreferencesModel extends ChangeNotifier {
     await _prefs.setBool('useSystemTheme', useSystemTheme);
     await _prefs.setBool('enableHaptics', enableHaptics);
     await _prefs.setString('colorTheme', colorTheme);
+    await _prefs.setDouble('weirdnessTolerance', weirdnessTolerance);
     await _prefs.setStringList('favoriteActivities', favoriteActivities);
   }
   
@@ -216,6 +232,9 @@ class PreferencesModel extends ChangeNotifier {
         break;
       case PreferenceKey.colorTheme:
         colorTheme = value as String;
+        break;
+      case PreferenceKey.weirdnessTolerance:
+        weirdnessTolerance = (value as double).clamp(0.0, 1.0);
         break;
     }
     savePreferences();

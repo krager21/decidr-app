@@ -199,6 +199,7 @@ class _CardRevealPageState extends State<CardRevealPage>
       weather: weather,
       feedback: feedback,
       favoriteIds: prefs.favoriteActivities,
+      weirdnessTolerance: prefs.weirdnessTolerance,
       count: 9,
     );
 
@@ -567,6 +568,7 @@ class _CardRevealPageState extends State<CardRevealPage>
   }
 
   Widget _buildIdleCallToAction(ThemeData theme) {
+    final prefs = Provider.of<PreferencesModel>(context);
     return Column(
       key: const ValueKey('idle'),
       mainAxisSize: MainAxisSize.min,
@@ -578,7 +580,13 @@ class _CardRevealPageState extends State<CardRevealPage>
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
+        _WeirdnessSlider(
+          value: prefs.weirdnessTolerance,
+          onChanged: (v) =>
+              prefs.setPreference(PreferenceKey.weirdnessTolerance, v),
+        ),
+        const SizedBox(height: 14),
         FilledButton.icon(
           onPressed: _deal,
           icon: const Icon(Icons.style),
@@ -1057,6 +1065,75 @@ class _ContextChip extends StatelessWidget {
           Text(label, style: theme.textTheme.labelSmall),
         ],
       ),
+    );
+  }
+}
+
+/// "Comfort ◀── ▶ Surprise me" slider for the user's weirdness tolerance.
+///
+/// Shown only on the idle state of the card reveal page so it doesn't
+/// clutter the deal/settled animations. Updates the preference live —
+/// no commit step. The value flows into
+/// `getStructuredSuggestions(weirdnessTolerance:)` on the next deal.
+class _WeirdnessSlider extends StatelessWidget {
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  const _WeirdnessSlider({required this.value, required this.onChanged});
+
+  String get _label {
+    if (value < 0.15) return 'Comfort food';
+    if (value < 0.35) return 'A little novel';
+    if (value < 0.55) return 'Mix it up';
+    if (value < 0.75) return 'Lean weird';
+    return 'Surprise me';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.local_cafe,
+              size: 14,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              _label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.auto_awesome,
+              size: 14,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          width: 240,
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              overlayShape: SliderComponentShape.noOverlay,
+            ),
+            child: Slider(
+              value: value,
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

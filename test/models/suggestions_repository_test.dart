@@ -217,6 +217,51 @@ void main() {
           reason: 'Favorite should be the first result');
     });
 
+    test('low weirdness tolerance favors mainstream entries', () {
+      // At tolerance 0.0, mainstream (low-weirdness) entries should
+      // outscore weird tail entries. Sample many results to check the
+      // overall lean rather than fight randomness in the top-band shuffle.
+      var lowMean = 0.0;
+      const samples = 5;
+      for (var i = 0; i < samples; i++) {
+        final r = repo.getStructuredSuggestions(
+          activityType: ActivityType.indoor,
+          mood: Mood.relaxed,
+          timeOfDay: TimeOfDayPref.evening,
+          energyLevel: 2.0,
+          weirdnessTolerance: 0.0,
+          count: 8,
+        );
+        lowMean +=
+            r.map((s) => s.weirdness).reduce((a, b) => a + b) / r.length;
+      }
+      lowMean /= samples;
+      expect(lowMean, lessThan(0.4),
+          reason: 'At tolerance 0.0, average weirdness should be low; '
+              'got $lowMean');
+    });
+
+    test('high weirdness tolerance favors weird-tail entries', () {
+      var highMean = 0.0;
+      const samples = 5;
+      for (var i = 0; i < samples; i++) {
+        final r = repo.getStructuredSuggestions(
+          activityType: ActivityType.indoor,
+          mood: Mood.relaxed,
+          timeOfDay: TimeOfDayPref.evening,
+          energyLevel: 2.0,
+          weirdnessTolerance: 1.0,
+          count: 8,
+        );
+        highMean +=
+            r.map((s) => s.weirdness).reduce((a, b) => a + b) / r.length;
+      }
+      highMean /= samples;
+      expect(highMean, greaterThan(0.5),
+          reason: 'At tolerance 1.0, average weirdness should be high; '
+              'got $highMean');
+    });
+
     test('count caps the result length', () {
       final results = repo.getStructuredSuggestions(
         activityType: ActivityType.indoor,
