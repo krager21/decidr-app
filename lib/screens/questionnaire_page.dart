@@ -170,32 +170,33 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
   // Build pages conditionally based on auto-detect time setting
   List<Widget> _buildPages(ThemeData theme, PreferencesModel preferencesModel) {
     final pages = <Widget>[
-      // Page 1: Activity preference
+      // Page 1: Activity preference + mood
       QuestionCard(
-        question: 'What type of activities do you prefer?',
-        description: 'This helps us suggest activities that match your environment preferences.',
-        child: Column(
-          children: preferencesModel.activityOptions.map((option) {
-            return ActivityOptionCard(
-              title: option,
-              isSelected: preferencesModel.activityPreference == option,
-              icon: _getActivityIcon(option),
-              onTap: () {
-                preferencesModel.updatePreference('activityPreference', option);
-              },
-            );
-          }).toList(),
-        ),
-      ),
-
-      // Page 2: Mood and energy level
-      QuestionCard(
-        question: 'How are you feeling today?',
-        description: 'Tell us about your mood and energy level for better suggestions.',
+        question: 'Where and how are you?',
+        description:
+            'Pick your environment and your current mood. Both shape what we deal you.',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Mood options
+            Text(
+              'Environment:',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            ...preferencesModel.activityOptions.map((option) {
+              return ActivityOptionCard(
+                title: option,
+                isSelected: preferencesModel.activityPreference == option,
+                icon: _getActivityIcon(option),
+                onTap: () {
+                  preferencesModel.updatePreference(
+                    'activityPreference',
+                    option,
+                  );
+                },
+              );
+            }),
+            const SizedBox(height: 20),
             Text(
               'Current mood:',
               style: theme.textTheme.titleMedium,
@@ -220,10 +221,19 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
                 );
               }).toList(),
             ),
+          ],
+        ),
+      ),
 
-            const SizedBox(height: 24),
-
-            // Energy level slider with improved label position
+      // Page 2: Energy level + weirdness tolerance
+      QuestionCard(
+        question: 'How adventurous are you feeling?',
+        description:
+            'Energy is how much oomph you have. Weirdness is how off-the-wall you want the suggestions.',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Energy level slider
             Text(
               'Energy level:',
               style: theme.textTheme.titleMedium,
@@ -243,13 +253,14 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
                         divisions: 4,
                         label: _getEnergyLabel(preferencesModel.energyLevel),
                         onChanged: (value) {
-                          preferencesModel.updatePreference('energyLevel', value);
+                          preferencesModel.updatePreference(
+                            'energyLevel',
+                            value,
+                          );
                         },
                       ),
-                      // Calculate position for the energy label
                       Align(
                         alignment: Alignment(
-                          // Map 1.0-5.0 range to -1.0 to 1.0 range for Alignment
                           (preferencesModel.energyLevel - 3.0) / 2.0,
                           0.0,
                         ),
@@ -262,6 +273,55 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
                   ),
                 ),
                 Icon(Icons.battery_full, color: theme.colorScheme.primary),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            // Weirdness tolerance slider
+            Text(
+              'Weirdness:',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.local_cafe,
+                    color: theme.colorScheme.onSurfaceVariant),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Slider(
+                        value: preferencesModel.weirdnessTolerance,
+                        min: 0.0,
+                        max: 1.0,
+                        label: _getWeirdnessLabel(
+                          preferencesModel.weirdnessTolerance,
+                        ),
+                        onChanged: (value) {
+                          preferencesModel.setPreference(
+                            PreferenceKey.weirdnessTolerance,
+                            value,
+                          );
+                        },
+                      ),
+                      Align(
+                        alignment: Alignment(
+                          // Map 0..1 to -1..1
+                          preferencesModel.weirdnessTolerance * 2 - 1,
+                          0.0,
+                        ),
+                        child: Text(
+                          _getWeirdnessLabel(
+                            preferencesModel.weirdnessTolerance,
+                          ),
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.auto_awesome, color: theme.colorScheme.primary),
               ],
             ),
           ],
@@ -299,9 +359,12 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
   bool _canContinue(PreferencesModel model, int page) {
     switch (page) {
       case 0:
-        return model.activityPreference != null;
+        // Page 1 now combines activity and mood — both required.
+        return model.activityPreference != null && model.mood != null;
       case 1:
-        return model.mood != null;
+        // Energy and weirdness both default to sensible values, so
+        // page 2 has no required field — the user can advance any time.
+        return true;
       case 2:
         // Only validate time selection if auto-detect is disabled
         return model.autoDetectTime || model.timeOfDay != null;
@@ -379,5 +442,14 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
     if (level < 3.5) return 'Medium';
     if (level < 4.5) return 'High';
     return 'Very High';
+  }
+
+  // Get label for weirdness tolerance
+  String _getWeirdnessLabel(double level) {
+    if (level < 0.15) return 'Comfort food';
+    if (level < 0.35) return 'A little novel';
+    if (level < 0.55) return 'Mix it up';
+    if (level < 0.75) return 'Lean weird';
+    return 'Surprise me';
   }
 }
