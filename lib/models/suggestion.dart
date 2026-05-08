@@ -163,9 +163,26 @@ class Suggestion {
   /// Weather suitability.
   final WeatherTolerance weather;
 
-  /// Free-form tags for grouping / future filters
-  /// (e.g. `screen-free`, `free`, `creative`, `physical`).
+  /// Free-form descriptive tags
+  /// (e.g. `screen-free`, `free`, `quick`, `physical`).
+  ///
+  /// Tags describe **properties** of the activity. For user-facing
+  /// **categories** (music, food, fitness, etc.) use [interests] instead —
+  /// see [Interests] for the canonical taxonomy.
   final List<String> tags;
+
+  /// First-class interest categories this activity falls under.
+  ///
+  /// Use values from [Interests] for catalog entries. The future
+  /// "I'm interested in {music, food, …}" filter will match a user's
+  /// selected interests against this field. An empty list means the
+  /// activity is generic (matches any interest filter).
+  ///
+  /// Distinct from [tags] in intent: tags describe the activity;
+  /// interests categorise it for user-driven filtering and external
+  /// suggestion sources (e.g. a future concert integration would
+  /// produce suggestions with `interests: [Interests.music]`).
+  final List<String> interests;
 
   /// True if user-added at runtime (not part of the shipped catalog).
   final bool isCustom;
@@ -183,6 +200,7 @@ class Suggestion {
     required this.durationMinutes,
     this.weather = WeatherTolerance.any,
     this.tags = const [],
+    this.interests = const [],
     this.isCustom = false,
   });
 
@@ -204,6 +222,7 @@ class Suggestion {
     int? durationMinutes,
     WeatherTolerance? weather,
     List<String>? tags,
+    List<String>? interests,
     bool? isCustom,
   }) {
     return Suggestion(
@@ -219,6 +238,7 @@ class Suggestion {
       durationMinutes: durationMinutes ?? this.durationMinutes,
       weather: weather ?? this.weather,
       tags: tags ?? this.tags,
+      interests: interests ?? this.interests,
       isCustom: isCustom ?? this.isCustom,
     );
   }
@@ -236,6 +256,7 @@ class Suggestion {
         'durationMinutes': durationMinutes,
         'weather': weather.name,
         'tags': tags,
+        'interests': interests,
         'isCustom': isCustom,
       };
 
@@ -263,6 +284,11 @@ class Suggestion {
       tags: (json['tags'] as List<dynamic>? ?? [])
           .map((t) => t as String)
           .toList(),
+      // `interests` is a Phase-5 addition. Older persisted JSON may
+      // omit it — treat missing as empty list (non-breaking).
+      interests: (json['interests'] as List<dynamic>? ?? [])
+          .map((i) => i as String)
+          .toList(),
       isCustom: json['isCustom'] as bool? ?? false,
     );
   }
@@ -276,6 +302,72 @@ class Suggestion {
 
   @override
   String toString() => 'Suggestion($id: $title)';
+}
+
+/// Canonical interest categories — the taxonomy used by [Suggestion.interests].
+///
+/// Stable strings, not an enum, so the catalog can be edited and external
+/// suggestion sources can populate this field without a code change. The
+/// constants below are the single source of truth — UIs and filters
+/// should reference them rather than hard-coding the strings.
+///
+/// Add new interests by appending to [all]. Don't rename existing ones —
+/// they're persisted in the catalog.
+class Interests {
+  Interests._(); // not instantiable
+
+  // Active / outdoors
+  static const String nature = 'nature';
+  static const String fitness = 'fitness';
+  static const String sports = 'sports';
+  static const String walking = 'walking';
+  static const String adventure = 'adventure';
+
+  // Creative / making
+  static const String art = 'art';
+  static const String music = 'music';
+  static const String writing = 'writing';
+  static const String photography = 'photography';
+  static const String crafts = 'crafts';
+  static const String creativity = 'creativity';
+
+  // Mind / learning
+  static const String reading = 'reading';
+  static const String learning = 'learning';
+  static const String mindfulness = 'mindfulness';
+
+  // Food & home
+  static const String food = 'food';
+  static const String cooking = 'cooking';
+  static const String home = 'home';
+  static const String gardening = 'gardening';
+
+  // People / community
+  static const String social = 'social';
+  static const String connection = 'connection';
+  static const String community = 'community';
+  static const String family = 'family';
+
+  // Self & lifestyle
+  static const String wellness = 'wellness';
+  static const String productivity = 'productivity';
+  static const String games = 'games';
+  static const String tech = 'tech';
+  static const String exploration = 'exploration';
+  static const String culture = 'culture';
+
+  /// All canonical interest values, useful for UI pickers and validation.
+  ///
+  /// Order roughly groups related interests so a future picker can show
+  /// them in sensible sections.
+  static const List<String> all = [
+    nature, fitness, sports, walking, adventure,
+    art, music, writing, photography, crafts, creativity,
+    reading, learning, mindfulness,
+    food, cooking, home, gardening,
+    social, connection, community, family,
+    wellness, productivity, games, tech, exploration, culture,
+  ];
 }
 
 /// Lookup table mapping icon name strings to Material [IconData].

@@ -69,8 +69,39 @@ void main() {
         expect(restored.durationMinutes, s.durationMinutes);
         expect(restored.weather, s.weather);
         expect(restored.tags, s.tags);
+        expect(restored.interests, s.interests);
         expect(restored.isCustom, s.isCustom);
       }
+    });
+
+    test('every interest used by the catalog is in Interests.all', () {
+      final canonical = Interests.all.toSet();
+      for (final s in defaultSuggestions) {
+        for (final interest in s.interests) {
+          expect(canonical, contains(interest),
+              reason: '${s.id} uses unknown interest "$interest" — '
+                  'add it to Interests.all or fix the typo');
+        }
+      }
+    });
+
+    test('Suggestion JSON without interests round-trips with empty list', () {
+      // Backward-compat: old persisted JSON pre-dates the interests
+      // field. Loading it should not throw and should produce an empty
+      // interests list.
+      final legacyJson = {
+        'id': 'old-entry',
+        'title': 'Old entry',
+        'description': '',
+        'iconName': 'menu_book',
+        'activityType': 'indoor',
+        'moods': ['relaxed'],
+        'social': ['solo'],
+        'energyLevel': 2.0,
+        'durationMinutes': 30,
+      };
+      final s = Suggestion.fromJson(legacyJson);
+      expect(s.interests, isEmpty);
     });
 
     test('catalog covers every (activityType × mood) bucket', () {
