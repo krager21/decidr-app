@@ -119,7 +119,7 @@ void main() {
       expect(model.favoriteActivities, isEmpty);
       expect(model.isFavorite('Reading'), false);
 
-      model.toggleFavorite('Reading');
+      await model.toggleFavorite('Reading');
 
       expect(model.favoriteActivities, contains('Reading'));
       expect(model.isFavorite('Reading'), true);
@@ -134,16 +134,16 @@ void main() {
 
       expect(model.isFavorite('Walking'), true);
 
-      model.toggleFavorite('Walking');
+      await model.toggleFavorite('Walking');
 
       expect(model.favoriteActivities, isNot(contains('Walking')));
       expect(model.isFavorite('Walking'), false);
     });
 
-    test('should manage multiple favorites', () {
-      model.toggleFavorite('Reading');
-      model.toggleFavorite('Walking');
-      model.toggleFavorite('Cooking');
+    test('should manage multiple favorites', () async {
+      await model.toggleFavorite('Reading');
+      await model.toggleFavorite('Walking');
+      await model.toggleFavorite('Cooking');
 
       expect(model.favoriteActivities.length, 3);
       expect(model.isFavorite('Reading'), true);
@@ -158,7 +158,7 @@ void main() {
       model.timeOfDay = 'Evening';
       await model.savePreferences();
 
-      model.resetPreferences();
+      await model.resetPreferences();
 
       expect(model.activityPreference, isNull);
       expect(model.mood, isNull);
@@ -177,7 +177,7 @@ void main() {
       model.favoriteActivities.add('Reading');
       await model.savePreferences();
 
-      model.resetPreferences();
+      await model.resetPreferences();
 
       expect(model.useDarkMode, true);
       expect(model.colorTheme, 'sunset');
@@ -187,9 +187,21 @@ void main() {
     test('should report preferences incomplete when missing values', () {
       model.activityPreference = 'Indoor';
       model.mood = 'Relaxed';
+      // With autoDetectTime=false, timeOfDay must be set explicitly,
+      // so leaving it null leaves preferences incomplete.
+      model.autoDetectTime = false;
       // timeOfDay is null
 
       expect(model.arePreferencesComplete, false);
+    });
+
+    test('arePreferencesComplete treats time as optional when auto-detect is on', () {
+      model.activityPreference = 'Indoor';
+      model.mood = 'Relaxed';
+      model.autoDetectTime = true;
+      // timeOfDay is null but auto-detect fills it in at read time.
+
+      expect(model.arePreferencesComplete, true);
     });
 
     test('should report preferences complete when all required values set', () {
@@ -211,24 +223,24 @@ void main() {
       expect(listenerCallCount, 1);
     });
 
-    test('should notify listeners when toggling favorites', () {
+    test('should notify listeners when toggling favorites', () async {
       int listenerCallCount = 0;
       model.addListener(() {
         listenerCallCount++;
       });
 
-      model.toggleFavorite('Yoga');
+      await model.toggleFavorite('Yoga');
 
       expect(listenerCallCount, 1);
     });
 
-    test('should notify listeners when resetting preferences', () {
+    test('should notify listeners when resetting preferences', () async {
       int listenerCallCount = 0;
       model.addListener(() {
         listenerCallCount++;
       });
 
-      model.resetPreferences();
+      await model.resetPreferences();
 
       expect(listenerCallCount, 1);
     });

@@ -164,24 +164,35 @@ class PreferencesModel extends ChangeNotifier {
     notifyListeners();
   }
   
-  /// Save all current preferences to SharedPreferences
+  /// Save all current preferences to SharedPreferences.
   ///
-  /// Persists all non-null preference values to device storage.
+  /// Optional/nullable preferences are *removed* from storage when their
+  /// in-memory value is null, so that calling [resetPreferences] (which
+  /// flips them back to null) actually clears the persisted value
+  /// instead of leaving stale data behind.
   Future<void> savePreferences() async {
     if (activityPreference != null) {
       await _prefs.setString('activityPreference', activityPreference!);
+    } else {
+      await _prefs.remove('activityPreference');
     }
     // Mood is deliberately not saved — see [loadPreferences] for why.
     await _prefs.setDouble('energyLevel', energyLevel);
     if (timeOfDay != null) {
       await _prefs.setString('timeOfDay', timeOfDay!);
+    } else {
+      await _prefs.remove('timeOfDay');
     }
     await _prefs.setBool('autoDetectTime', autoDetectTime);
     if (socialContext != null) {
       await _prefs.setString('socialContext', socialContext!);
+    } else {
+      await _prefs.remove('socialContext');
     }
     if (duration != null) {
       await _prefs.setString('duration', duration!);
+    } else {
+      await _prefs.remove('duration');
     }
     await _prefs.setBool('useDarkMode', useDarkMode);
     await _prefs.setBool('useSystemTheme', useSystemTheme);
@@ -256,14 +267,18 @@ class PreferencesModel extends ChangeNotifier {
   /// Post-Phase-3, callers pass the id of the suggestion (catalog
   /// slug or `custom-<hash>`), not its title. Adds it to favorites if
   /// not present, removes it otherwise. Saves and notifies listeners.
-  void toggleFavorite(String id) {
+  ///
+  /// Returns a [Future] that completes when the persist round-trip
+  /// finishes. UI callers can ignore it; tests should await it so the
+  /// post-toggle assertions don't race the storage write.
+  Future<void> toggleFavorite(String id) async {
     if (favoriteActivities.contains(id)) {
       favoriteActivities.remove(id);
     } else {
       favoriteActivities.add(id);
     }
-    savePreferences();
     notifyListeners();
+    await savePreferences();
   }
 
   /// Whether the suggestion with the given [id] is a favorite.
@@ -276,14 +291,18 @@ class PreferencesModel extends ChangeNotifier {
   /// Clears activity preference, mood, and time of day. Resets energy
   /// level to 3.0 and weirdness tolerance to 0.3. Theme settings,
   /// favorites, history, and feedback are not affected.
-  void resetPreferences() {
+  ///
+  /// Returns a [Future] that completes when the cleared values are
+  /// flushed to storage — important so reopen-the-app behavior matches
+  /// in-memory state immediately after a reset.
+  Future<void> resetPreferences() async {
     activityPreference = null;
     mood = null;
     energyLevel = 3.0;
     timeOfDay = null;
     weirdnessTolerance = 0.3;
-    savePreferences();
     notifyListeners();
+    await savePreferences();
   }
 
   /// Check if all required preferences for dealing cards are set.
