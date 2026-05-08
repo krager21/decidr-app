@@ -11,6 +11,7 @@ import '../models/preferences_model.dart';
 import '../models/suggestion.dart';
 import '../models/suggestions_repository.dart';
 import '../services/weather_service.dart';
+import '../utils/constants.dart';
 import '../widgets/decision_card.dart';
 import 'questionnaire_page.dart';
 
@@ -695,12 +696,87 @@ class _CardRevealPageState extends State<CardRevealPage>
           ],
         ),
         const SizedBox(height: 8),
-        TextButton.icon(
-          onPressed: _deal,
-          icon: const Icon(Icons.refresh, size: 18),
-          label: const Text('Deal again'),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextButton.icon(
+              onPressed: _deal,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Deal again'),
+            ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: _showAddCardDialog,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add your own'),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  /// Inline "add a custom activity" dialog shown from the settled state.
+  /// Same logic as the profile page's tile, but reachable in-context
+  /// — when the user has just looked at three results and might be
+  /// thinking "none of these are quite right."
+  void _showAddCardDialog() {
+    final suggestionsRepo =
+        Provider.of<SuggestionsRepository>(context, listen: false);
+    final textController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add your own activity'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Mix it into your deck. We\'ll deal it alongside our '
+              'suggestions on future hands.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: textController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Activity',
+                hintText: 'e.g. Build a Lego castle',
+                border: OutlineInputBorder(),
+              ),
+              maxLength: SuggestionConstants.customSuggestionMaxLength,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final input = textController.text.trim();
+              final added = suggestionsRepo.addCustomSuggestion(input);
+              Navigator.pop(dialogContext);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    added
+                        ? 'Added "$input" to your deck.'
+                        : 'Could not add (empty, duplicate, or list full).',
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 
