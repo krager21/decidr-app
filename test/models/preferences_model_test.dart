@@ -53,7 +53,9 @@ void main() {
       await loadedModel.loadPreferences();
 
       expect(loadedModel.activityPreference, 'Indoor');
-      expect(loadedModel.mood, 'Relaxed');
+      // Mood is intentionally not persisted; loadPreferences clears it
+      // even if a value is in storage (legacy data is ignored).
+      expect(loadedModel.mood, isNull);
       expect(loadedModel.energyLevel, 4.0);
       expect(loadedModel.timeOfDay, 'Evening');
       expect(loadedModel.useDarkMode, true);
@@ -63,9 +65,12 @@ void main() {
       expect(loadedModel.favoriteActivities, ['Reading', 'Walking']);
     });
 
-    test('should migrate deprecated Energetic mood to null', () async {
+    test('mood always loads as null (intentionally not persisted)', () async {
+      // Mood is wiped on each launch so the user is asked
+      // "what's your mood today?" fresh every time. This subsumes the
+      // older "deprecated Energetic mood is reset" test.
       SharedPreferences.setMockInitialValues({
-        'mood': 'Energetic', // Deprecated value
+        'mood': 'Productive',
       });
 
       final prefs = await SharedPreferences.getInstance();
@@ -85,7 +90,9 @@ void main() {
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('activityPreference'), 'Outdoor');
-      expect(prefs.getString('mood'), 'Productive');
+      // Mood is intentionally NOT persisted, so it never lands in
+      // storage even when the in-memory value is set.
+      expect(prefs.getString('mood'), isNull);
       expect(prefs.getDouble('energyLevel'), 5.0);
       expect(prefs.getString('timeOfDay'), 'Morning');
     });

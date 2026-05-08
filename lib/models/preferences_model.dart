@@ -143,11 +143,12 @@ class PreferencesModel extends ChangeNotifier {
   /// Notifies listeners after loading is complete.
   Future<void> loadPreferences() async {
     activityPreference = _prefs.getString('activityPreference');
-    mood = _prefs.getString('mood');
-    // If current mood is 'Energetic', reset it since we're removing that option
-    if (mood == 'Energetic') {
-      mood = null;
-    }
+    // Mood is intentionally **not persisted** — we ask "what's your
+    // mood today?" on each launch. Mood lives in memory for the
+    // session but gets cleared whenever the app is killed and
+    // reopened. Other preferences (activity, energy, weirdness, time
+    // of day) keep their stickiness.
+    mood = null;
     energyLevel = _prefs.getDouble('energyLevel') ?? 3.0;
     timeOfDay = _prefs.getString('timeOfDay');
     autoDetectTime = _prefs.getBool('autoDetectTime') ?? true;
@@ -170,9 +171,7 @@ class PreferencesModel extends ChangeNotifier {
     if (activityPreference != null) {
       await _prefs.setString('activityPreference', activityPreference!);
     }
-    if (mood != null) {
-      await _prefs.setString('mood', mood!);
-    }
+    // Mood is deliberately not saved — see [loadPreferences] for why.
     await _prefs.setDouble('energyLevel', energyLevel);
     if (timeOfDay != null) {
       await _prefs.setString('timeOfDay', timeOfDay!);
