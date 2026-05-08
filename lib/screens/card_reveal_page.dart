@@ -42,18 +42,59 @@ class CardRevealPage extends StatefulWidget {
   State<CardRevealPage> createState() => _CardRevealPageState();
 }
 
-class _CardRevealPageState extends State<CardRevealPage> {
+class _CardRevealPageState extends State<CardRevealPage>
+    with SingleTickerProviderStateMixin {
   // ─── animation timing knobs ───────────────────────────────────
-  // Sequence: left flips, right flips, middle flips, then settle.
-  // Tuning these is the easiest way to adjust feel.
-  static const _firstFlipDelay = Duration(milliseconds: 250);
-  static const _secondFlipDelay = Duration(milliseconds: 1000);
-  static const _thirdFlipDelay = Duration(milliseconds: 1850);
-  static const _settleDelay = Duration(milliseconds: 2700);
+  //
+  // Full sequence:
+  //   0–700ms        Cards deal in from above (staggered: L → R → M)
+  //   +250ms         Settle breath
+  //   +100ms         Card 0 (left) flips up   · light haptic
+  //   +650ms more    Card 2 (right) flips up  · light haptic
+  //   +650ms more    Card 1 (middle) flips up · medium haptic — chosen
+  //   +850ms more    Settle: chosen scales+glows, description slides up
+  //
+  // Total ~3.2s. Each timing knob can be tuned independently.
+  static const _dealInDuration = Duration(milliseconds: 700);
+  static const _dealInBreath = Duration(milliseconds: 250);
+
+  /// Flip delays, measured from end of [_dealInBreath].
+  static const _firstFlipDelay = Duration(milliseconds: 100);
+  static const _secondFlipDelay = Duration(milliseconds: 750);
+  static const _thirdFlipDelay = Duration(milliseconds: 1400);
+  static const _settleDelay = Duration(milliseconds: 2250);
+
+  /// Landing-haptic offsets, measured from start of deal-in.
+  /// One subtle tap per card as it touches down.
+  static const _land0Delay = Duration(milliseconds: 315);
+  static const _land2Delay = Duration(milliseconds: 490);
+  static const _land1Delay = Duration(milliseconds: 665);
 
   /// When re-dealing from the settled state, give the existing cards
-  /// a moment to flip back down before showing the new pool.
+  /// a moment to flip back down before the new pool is staged.
   static const _redealResetDelay = Duration(milliseconds: 450);
+
+  /// Per-slot deal-in window within `_dealInController.value` (0..1).
+  /// Indexed by slot (0 = left, 1 = middle, 2 = right).
+  /// Slot 0 lands first, slot 2 second, slot 1 last — the chosen
+  /// middle card is the final piece of the pre-flip choreography.
+  static const _slotDealStart = <double>[0.00, 0.50, 0.25];
+  static const _slotDealEnd = <double>[0.45, 0.95, 0.70];
+
+  /// Per-slot starting offset and rotation for the deal-in.
+  /// Cards arrive from above-and-outside, fanning toward their slots.
+  static const _slotStartOffsets = <Offset>[
+    Offset(70, -210),   // slot 0 (left) starts above-right of its slot
+    Offset(0, -240),    // slot 1 (middle) drops straight down
+    Offset(-70, -210),  // slot 2 (right) starts above-left of its slot
+  ];
+  static const _slotStartRotations = <double>[
+    0.30,   // slot 0 — tilted right
+    0.0,    // slot 1
+    -0.30,  // slot 2 — tilted left
+  ];
+
+  late final AnimationController _dealInController;
 
   // ─── state ────────────────────────────────────────────────────
   _RevealStage _stage = _RevealStage.idle;
@@ -81,6 +122,10 @@ class _CardRevealPageState extends State<CardRevealPage> {
   @override
   void initState() {
     super.initState();
+    _dealInController = AnimationController(
+      vsync: this,
+      duration: _dealInDuration,
+    );
     // Trigger a rebuild after first frame so the empty/idle distinction
     // is correct based on currently-loaded preferences.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -92,6 +137,7 @@ class _CardRevealPageState extends State<CardRevealPage> {
   @override
   void dispose() {
     _cancelAllTimers();
+    _dealInController.dispose();
     super.dispose();
   }
 
@@ -142,8 +188,8 @@ class _CardRevealPageState extends State<CardRevealPage> {
     return pool;
   }
 
-  /// Kick off a fresh deal — cards flip back to face-down (if applicable)
-  /// and then flip up sequentially with new candidates.
+  /// Kick off a fresh deal — cards flip back if applicable, deal in
+  /// from above, then flip up sequentially with new candidates.
   Future<void> _deal() async {
     if (_stage == _RevealStage.dealing) return;
     _cancelAllTimers();
@@ -172,11 +218,38 @@ class _CardRevealPageState extends State<CardRevealPage> {
       _revealedSlots.clear();
     });
 
-    // Reveal sequence: left → right → middle (chosen).
-    _flipTimers[0] = Timer(_firstFlipDelay, () => _revealSlot(0, soft: true));
-    _flipTimers[1] = Timer(_secondFlipDelay, () => _revealSlot(2, soft: true));
-    _flipTimers[2] = Timer(_thirdFlipDelay, () => _revealSlot(1, soft: false));
+    // Stage 1: deal-in. Cards animate from off-screen to their slots.
+    _dealInController.value = 0.0;
+    _scheduleLandingHaptic(_land0Delay);
+    _scheduleLandingHaptic(_land2Delay);
+    _scheduleLandingHaptic(_land1Delay);
+    await _dealInController.forward();
+    if (!mounted) return;
+
+    // Stage 2: a brief breath after the cards land.
+    await Future.delayed(_dealInBreath);
+    if (!mounted) return;
+
+    // Stage 3: reveal sequence — left → right → middle (chosen).
+    // Delays are measured from now (end of breath).
+    _flipTimers[0] =
+        Timer(_firstFlipDelay, () => _revealSlot(0, soft: true));
+    _flipTimers[1] =
+        Timer(_secondFlipDelay, () => _revealSlot(2, soft: true));
+    _flipTimers[2] =
+        Timer(_thirdFlipDelay, () => _revealSlot(1, soft: false));
     _settleTimer = Timer(_settleDelay, _settle);
+  }
+
+  /// Schedule a subtle haptic for when a card touches down during deal-in.
+  void _scheduleLandingHaptic(Duration delay) {
+    Timer(delay, () {
+      if (!mounted) return;
+      final prefs = Provider.of<PreferencesModel>(context, listen: false);
+      if (prefs.enableHaptics) {
+        HapticFeedback.selectionClick();
+      }
+    });
   }
 
   void _revealSlot(int slot, {required bool soft}) {
@@ -203,6 +276,9 @@ class _CardRevealPageState extends State<CardRevealPage> {
 
   void _resetToIdle() {
     _cancelAllTimers();
+    // Snap cards back to their pre-deal off-screen position so the next
+    // deal can animate them in fresh.
+    _dealInController.reset();
     setState(() {
       _stage = _RevealStage.idle;
       _slotSuggestions = [null, null, null];
@@ -368,13 +444,57 @@ class _CardRevealPageState extends State<CardRevealPage> {
   Widget _buildCardsRow() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: List.generate(3, (i) {
-        return DecisionCard(
-          state: _stateForSlot(i),
-          suggestion: _slotSuggestions[i],
-        );
-      }),
+      children: List.generate(3, _buildSlot),
     );
+  }
+
+  /// Per-slot wrapper: applies the deal-in transform (translate + rotate
+  /// + opacity) on top of the [DecisionCard]'s own internal flip animation.
+  ///
+  /// At `_dealInController.value == 0` the card sits off-screen above its
+  /// slot, rotated, fully transparent. As the controller advances, the
+  /// card translates into place and fades in. Each slot has its own
+  /// staggered window in [_slotDealRanges] so cards arrive sequentially.
+  Widget _buildSlot(int slot) {
+    return AnimatedBuilder(
+      animation: _dealInController,
+      builder: (context, _) {
+        final progress = _slotProgress(slot, _dealInController.value);
+        final eased = Curves.easeOutQuart.transform(progress);
+
+        final start = _slotStartOffsets[slot];
+        final dx = start.dx * (1 - eased);
+        final dy = start.dy * (1 - eased);
+        final rotation = _slotStartRotations[slot] * (1 - eased);
+        // Cards fade in faster than they finish travelling so they feel
+        // more present as they arrive.
+        final opacity = Curves.easeOut.transform(progress).clamp(0.0, 1.0);
+
+        return Opacity(
+          opacity: opacity,
+          child: Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..translateByDouble(dx, dy, 0, 1)
+              ..rotateZ(rotation),
+            child: DecisionCard(
+              state: _stateForSlot(slot),
+              suggestion: _slotSuggestions[slot],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Map the global deal-in controller value to this slot's local
+  /// 0..1 progress, given its staggered window.
+  double _slotProgress(int slot, double t) {
+    final start = _slotDealStart[slot];
+    final end = _slotDealEnd[slot];
+    if (t <= start) return 0.0;
+    if (t >= end) return 1.0;
+    return ((t - start) / (end - start)).clamp(0.0, 1.0);
   }
 
   /// Map the page's overall stage + per-slot reveal status to the card's
