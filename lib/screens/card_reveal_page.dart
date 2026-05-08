@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,7 +18,12 @@ enum _RevealStage {
   /// Pre-deal — three face-down cards waiting for "Deal cards" tap.
   idle,
 
-  /// Cards are flipping face-up one at a time (left → right → middle).
+  /// "Thinking" phase: filter medallions appear above the cards and
+  /// pulse, signalling the algorithm is considering. No cards yet.
+  considering,
+
+  /// Cards deal in from above and then flip up one at a time
+  /// (left → right → middle).
   dealing,
 
   /// All cards face-up; the chosen middle card is elevated and the
@@ -43,18 +49,22 @@ class CardRevealPage extends StatefulWidget {
 }
 
 class _CardRevealPageState extends State<CardRevealPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // ─── animation timing knobs ───────────────────────────────────
   //
   // Full sequence:
-  //   0–700ms        Cards deal in from above (staggered: L → R → M)
-  //   +250ms         Settle breath
-  //   +100ms         Card 0 (left) flips up   · light haptic
-  //   +650ms more    Card 2 (right) flips up  · light haptic
-  //   +650ms more    Card 1 (middle) flips up · medium haptic — chosen
-  //   +850ms more    Settle: chosen scales+glows, description slides up
+  //   0–500ms       "Considering" — filter medallions fade in (staggered)
+  //   +600ms more   Dots pulse — the "thinking" beat
+  //   0–700ms       Cards deal in from above (staggered: L → R → M)
+  //   +250ms        Settle breath
+  //   +100ms        Card 0 (left) flips up   · light haptic
+  //   +650ms more   Card 2 (right) flips up  · light haptic
+  //   +650ms more   Card 1 (middle) flips up · medium haptic — chosen
+  //   +850ms more   Settle: chosen scales+glows, description slides up
   //
-  // Total ~3.2s. Each timing knob can be tuned independently.
+  // Total ~4.4s. Each timing knob can be tuned independently.
+  static const _consideringRevealDuration = Duration(milliseconds: 500);
+  static const _consideringPulseDuration = Duration(milliseconds: 600);
   static const _dealInDuration = Duration(milliseconds: 700);
   static const _dealInBreath = Duration(milliseconds: 250);
 
@@ -96,6 +106,9 @@ class _CardRevealPageState extends State<CardRevealPage>
 
   late final AnimationController _dealInController;
 
+  /// Drives the medallion fade-in during the considering stage (0..1).
+  late final AnimationController _considerController;
+
   // ─── state ────────────────────────────────────────────────────
   _RevealStage _stage = _RevealStage.idle;
 
@@ -126,6 +139,10 @@ class _CardRevealPageState extends State<CardRevealPage>
       vsync: this,
       duration: _dealInDuration,
     );
+    _considerController = AnimationController(
+      vsync: this,
+      duration: _consideringRevealDuration,
+    );
     // Trigger a rebuild after first frame so the empty/idle distinction
     // is correct based on currently-loaded preferences.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -138,6 +155,7 @@ class _CardRevealPageState extends State<CardRevealPage>
   void dispose() {
     _cancelAllTimers();
     _dealInController.dispose();
+    _considerController.dispose();
     super.dispose();
   }
 
@@ -191,7 +209,11 @@ class _CardRevealPageState extends State<CardRevealPage>
   /// Kick off a fresh deal — cards flip back if applicable, deal in
   /// from above, then flip up sequentially with new candidates.
   Future<void> _deal() async {
-    if (_stage == _RevealStage.dealing) return;
+    // Block re-entry while a deal is in flight (considering OR dealing).
+    if (_stage == _RevealStage.considering ||
+        _stage == _RevealStage.dealing) {
+      return;
+    }
     _cancelAllTimers();
 
     final pool = _buildPool();
@@ -212,13 +234,21 @@ class _CardRevealPageState extends State<CardRevealPage>
     }
 
     setState(() {
-      _stage = _RevealStage.dealing;
+      _stage = _RevealStage.considering;
       _slotSuggestions = [pool[0], pool[1], pool[2]];
       _flanking = [pool[0], pool[2]];
       _revealedSlots.clear();
     });
 
+    // Stage 0: considering. Filter medallions fade in, dots pulse.
+    _considerController.value = 0.0;
+    await _considerController.forward();
+    if (!mounted) return;
+    await Future.delayed(_consideringPulseDuration);
+    if (!mounted) return;
+
     // Stage 1: deal-in. Cards animate from off-screen to their slots.
+    setState(() => _stage = _RevealStage.dealing);
     _dealInController.value = 0.0;
     _scheduleLandingHaptic(_land0Delay);
     _scheduleLandingHaptic(_land2Delay);
@@ -276,9 +306,10 @@ class _CardRevealPageState extends State<CardRevealPage>
 
   void _resetToIdle() {
     _cancelAllTimers();
-    // Snap cards back to their pre-deal off-screen position so the next
-    // deal can animate them in fresh.
+    // Snap cards back to their pre-deal off-screen position; reset the
+    // considering chain so it animates in fresh on the next deal.
     _dealInController.reset();
+    _considerController.reset();
     setState(() {
       _stage = _RevealStage.idle;
       _slotSuggestions = [null, null, null];
@@ -381,6 +412,8 @@ class _CardRevealPageState extends State<CardRevealPage>
                   child: Column(
                     children: [
                       const SizedBox(height: 12),
+                      _buildThinkingChainSlot(prefs),
+                      const SizedBox(height: 16),
                       _buildCardsRow(),
                       const SizedBox(height: 28),
                       AnimatedSwitcher(
@@ -500,27 +533,32 @@ class _CardRevealPageState extends State<CardRevealPage>
   /// Map the page's overall stage + per-slot reveal status to the card's
   /// own visual state.
   DecisionCardState _stateForSlot(int slot) {
-    if (_stage == _RevealStage.idle || _stage == _RevealStage.empty) {
-      return DecisionCardState.faceDown;
+    switch (_stage) {
+      case _RevealStage.idle:
+      case _RevealStage.empty:
+      case _RevealStage.considering:
+        // Cards stay face-down (they're off-screen anyway during
+        // considering since `_dealInController` is at 0).
+        return DecisionCardState.faceDown;
+      case _RevealStage.dealing:
+        return _revealedSlots.contains(slot)
+            ? DecisionCardState.revealed
+            : DecisionCardState.faceDown;
+      case _RevealStage.settled:
+        return slot == 1
+            ? DecisionCardState.chosen
+            : DecisionCardState.revealed;
     }
-    if (_stage == _RevealStage.dealing) {
-      return _revealedSlots.contains(slot)
-          ? DecisionCardState.revealed
-          : DecisionCardState.faceDown;
-    }
-    // settled
-    return slot == 1
-        ? DecisionCardState.chosen
-        : DecisionCardState.revealed;
   }
 
   Widget _buildBottomSection(ThemeData theme) {
     switch (_stage) {
       case _RevealStage.idle:
         return _buildIdleCallToAction(theme);
+      case _RevealStage.considering:
       case _RevealStage.dealing:
-        // No hint needed — the flips themselves are the visual feedback.
-        return const SizedBox(key: ValueKey('dealing'), height: 12);
+        // No hint needed — the chain and the flips are the visual feedback.
+        return const SizedBox(key: ValueKey('considering'), height: 12);
       case _RevealStage.settled:
         return _buildSettledResult(theme);
       case _RevealStage.empty:
@@ -729,11 +767,268 @@ class _CardRevealPageState extends State<CardRevealPage>
     );
   }
 
+  /// Reserves a fixed-height slot above the cards row that hosts the
+  /// thinking chain. The chain is invisible during idle/empty/settled
+  /// (so the slot is empty) and animated during considering/dealing.
+  Widget _buildThinkingChainSlot(PreferencesModel prefs) {
+    final showChain = _stage == _RevealStage.considering ||
+        _stage == _RevealStage.dealing;
+    final pulsing = _stage == _RevealStage.considering;
+
+    return SizedBox(
+      height: 56,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 280),
+        child: showChain
+            ? _ThinkingChain(
+                key: const ValueKey('chain'),
+                items: _thinkingItems(prefs),
+                revealController: _considerController,
+                pulsing: pulsing,
+              )
+            : const SizedBox.shrink(key: ValueKey('chain-empty')),
+      ),
+    );
+  }
+
+  /// Build the list of filter medallions to show in the thinking chain,
+  /// based on the user's current preferences.
+  List<_ThinkingItem> _thinkingItems(PreferencesModel prefs) {
+    return [
+      _ThinkingItem(
+        icon: _activityIcon(prefs.activityPreference),
+        label: prefs.activityPreference ?? '',
+      ),
+      _ThinkingItem(
+        icon: _moodIcon(prefs.mood),
+        label: prefs.mood ?? '',
+      ),
+      _ThinkingItem(
+        icon: _energyIcon(prefs.energyLevel),
+        label: 'Energy',
+      ),
+      _ThinkingItem(
+        icon: _timeIcon(prefs.effectiveTimeOfDay),
+        label: prefs.effectiveTimeOfDay,
+      ),
+    ];
+  }
+
   String _formatDuration(int mins) {
     if (mins < 60) return '$mins min';
     final hrs = mins / 60;
     if (hrs == hrs.floor()) return '${hrs.floor()} hr';
     return '${hrs.toStringAsFixed(1)} hr';
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Icon mapping for the thinking chain
+// ──────────────────────────────────────────────────────────────
+
+IconData _activityIcon(String? activity) {
+  switch (activity) {
+    case 'Outdoor':
+      return Icons.wb_sunny;
+    case 'Indoor':
+      return Icons.cottage;
+    case 'Hybrid':
+      return Icons.swap_horiz;
+    default:
+      return Icons.help_outline;
+  }
+}
+
+IconData _moodIcon(String? mood) {
+  switch (mood) {
+    case 'Relaxed':
+      return Icons.spa;
+    case 'Productive':
+      return Icons.checklist;
+    case 'Creative':
+      return Icons.palette;
+    case 'Social':
+      return Icons.people;
+    default:
+      return Icons.help_outline;
+  }
+}
+
+IconData _energyIcon(double energy) {
+  if (energy < 1.5) return Icons.bedtime;
+  if (energy < 2.5) return Icons.spa;
+  if (energy < 3.5) return Icons.directions_walk;
+  if (energy < 4.5) return Icons.bolt;
+  return Icons.local_fire_department;
+}
+
+IconData _timeIcon(String time) {
+  switch (time) {
+    case 'Morning':
+      return Icons.wb_twilight;
+    case 'Afternoon':
+      return Icons.brightness_5;
+    case 'Evening':
+      return Icons.brightness_4;
+    case 'Night':
+      return Icons.nightlight;
+    default:
+      return Icons.access_time;
+  }
+}
+
+/// One filter medallion in the thinking chain.
+class _ThinkingItem {
+  final IconData icon;
+  final String label;
+  const _ThinkingItem({required this.icon, required this.label});
+}
+
+/// Animated row of filter medallions connected by pulsing dots.
+///
+/// Visualises the algorithm "considering" the user's preferences before
+/// the cards are dealt. Each medallion fades and scales in as
+/// [revealController] advances 0 → 1; the dots between them pulse in a
+/// running wave when [pulsing] is true.
+class _ThinkingChain extends StatefulWidget {
+  final List<_ThinkingItem> items;
+  final AnimationController revealController;
+  final bool pulsing;
+
+  const _ThinkingChain({
+    super.key,
+    required this.items,
+    required this.revealController,
+    required this.pulsing,
+  });
+
+  @override
+  State<_ThinkingChain> createState() => _ThinkingChainState();
+}
+
+class _ThinkingChainState extends State<_ThinkingChain>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: AnimatedBuilder(
+        animation: Listenable.merge([widget.revealController, _pulseController]),
+        builder: (context, _) {
+          final children = <Widget>[];
+          for (var i = 0; i < widget.items.length; i++) {
+            if (i > 0) children.add(_buildDots());
+            children.add(_buildMedallion(i));
+          }
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: children,
+          );
+        },
+      ),
+    );
+  }
+
+  /// Compute this medallion's local 0..1 reveal progress from the
+  /// shared reveal controller. Each medallion has a 35% window with
+  /// overlap so the chain reads as a smooth left-to-right flow.
+  double _medallionProgress(int index) {
+    final n = widget.items.length;
+    final start = (index / n) * 0.65;
+    final end = (start + 0.35).clamp(0.0, 1.0);
+    final t = widget.revealController.value;
+    if (t <= start) return 0.0;
+    if (t >= end) return 1.0;
+    return ((t - start) / (end - start)).clamp(0.0, 1.0);
+  }
+
+  Widget _buildMedallion(int index) {
+    final theme = Theme.of(context);
+    final progress = _medallionProgress(index);
+    final opacity = Curves.easeOut.transform(progress);
+    final scale = 0.7 + 0.3 * Curves.easeOutBack.transform(progress);
+    final item = widget.items[index];
+
+    return Opacity(
+      opacity: opacity,
+      child: Transform.scale(
+        scale: scale,
+        child: Tooltip(
+          message: item.label,
+          waitDuration: const Duration(milliseconds: 500),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: theme.colorScheme.primaryContainer,
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: Icon(
+              item.icon,
+              size: 20,
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDots() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, _buildDot),
+      ),
+    );
+  }
+
+  Widget _buildDot(int dotIndex) {
+    final theme = Theme.of(context);
+    // Phase: each dot leads the next by 0.18 of a cycle so the pulse
+    // reads as a left-to-right wave rather than three dots blinking
+    // in unison.
+    final t = (_pulseController.value - dotIndex * 0.18) % 1.0;
+    // 0..1 pulse envelope: sin² lobe.
+    final pulse = math.pow(math.sin(t * math.pi), 2).toDouble();
+    final opacity = widget.pulsing ? (0.25 + 0.6 * pulse) : 0.35;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2.5),
+      child: Opacity(
+        opacity: opacity,
+        child: Container(
+          width: 4,
+          height: 4,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
   }
 }
 
