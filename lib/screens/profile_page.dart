@@ -352,7 +352,7 @@ class ProfilePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Add your own activity suggestions to include in the wheel.',
+                      'Add your own activities to mix into the deal.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -500,7 +500,7 @@ class ProfilePage extends StatelessWidget {
           const Divider(height: 1),
           SwitchListTile(
             title: const Text('Haptic Feedback'),
-            subtitle: const Text('Enable vibration when wheel stops'),
+            subtitle: const Text('Vibrate as cards land and flip'),
             secondary: const Icon(Icons.vibration),
             value: preferencesModel.enableHaptics,
             onChanged: (value) {

@@ -103,9 +103,9 @@ class SuggestionsRepository extends ChangeNotifier {
   /// across both the catalog and the user's custom list. Returns
   /// `null` if no match is found.
   ///
-  /// Used by the legacy string-API call sites (wheel page) to convert
-  /// a displayed title back to a [Suggestion.id] for history and
-  /// feedback recording.
+  /// Used by the legacy string-API call sites to convert a displayed
+  /// title back to a [Suggestion.id] for history and feedback
+  /// recording.
   Suggestion? findByTitle(String title) {
     final fromCatalog = suggestionByTitle(title);
     if (fromCatalog != null) return fromCatalog;
@@ -205,12 +205,14 @@ class SuggestionsRepository extends ChangeNotifier {
     }
   }
 
-  /// Resolve an icon for a suggestion title (legacy wheel painter shim).
+  /// Resolve an icon for a suggestion title.
   ///
   /// Looks up the title in the catalog first; falls back to a small
   /// keyword-based heuristic for titles that aren't in the catalog
   /// (e.g. one-off display values from stale persisted state).
-  /// New code should resolve via `Suggestion.iconData` directly.
+  /// New code should resolve via `Suggestion.iconData` directly —
+  /// this shim survives because some legacy title-keyed call sites
+  /// still pass titles instead of [Suggestion]s.
   IconData getIconForSuggestion(String suggestion) {
     final fromCatalog = suggestionByTitle(suggestion);
     if (fromCatalog != null) return fromCatalog.iconData;

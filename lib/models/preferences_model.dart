@@ -75,10 +75,13 @@ class PreferencesModel extends ChangeNotifier {
   /// Whether to follow system theme settings
   bool useSystemTheme = true;
 
-  /// Whether haptic feedback is enabled for wheel interactions
+  /// Whether haptic feedback is enabled for card interactions.
   bool enableHaptics = true;
 
-  /// Selected color theme for the wheel (rainbow, pastels, etc.)
+  /// Selected color theme (rainbow, pastels, etc.). Currently dormant —
+  /// kept for a possible future card-theme picker; the underlying
+  /// storage migration to remove it would be more disruptive than
+  /// leaving it in place.
   String colorTheme = 'rainbow';
 
   /// List of suggestion **ids** marked as favorites by the user.
@@ -105,7 +108,7 @@ class PreferencesModel extends ChangeNotifier {
   /// Available duration options
   final List<String> durationOptions = ['Quick (15 min)', 'Medium (1 hr)', 'Half Day', 'Full Day'];
 
-  /// Available color theme options for the wheel
+  /// Available color-theme options (dormant — see [colorTheme]).
   final List<String> themeOptions = ['Rainbow', 'Pastels', 'Monochrome', 'Ocean', 'Sunset'];
 
   PreferencesModel(this._prefs);
@@ -264,7 +267,7 @@ class PreferencesModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Check if all required preferences for wheel generation are set
+  /// Check if all required preferences for dealing cards are set.
   ///
   /// Returns true if activity preference and mood are selected.
   /// Time of day is optional when autoDetectTime is enabled.

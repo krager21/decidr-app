@@ -17,7 +17,7 @@ class SettingsPage extends StatelessWidget {
         children: [
           _buildThemeSettings(context),
           const Divider(),
-          _buildWheelSettings(context),
+          _buildExperienceSettings(context),
           const Divider(),
           _buildAboutSettings(context),
         ],
@@ -65,7 +65,7 @@ class SettingsPage extends StatelessWidget {
   }
 
   // Build decision-flow settings section
-  Widget _buildWheelSettings(BuildContext context) {
+  Widget _buildExperienceSettings(BuildContext context) {
     final theme = Theme.of(context);
     final preferencesModel = Provider.of<PreferencesModel>(context);
 
@@ -81,7 +81,7 @@ class SettingsPage extends StatelessWidget {
         ),
         SwitchListTile(
           title: const Text('Haptic Feedback'),
-          subtitle: const Text('Vibrate when cards lock in'),
+          subtitle: const Text('Vibrate as cards land and flip'),
           secondary: const Icon(Icons.vibration),
           value: preferencesModel.enableHaptics,
           onChanged: (value) {

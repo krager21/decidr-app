@@ -140,7 +140,7 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
                 onPressed: _canContinue(preferencesModel, _currentPage)
                     ? () {
                         if (_isLastPage) {
-                          // Navigate to wheel page
+                          // Navigate to the main tabs (cards-deal page)
                           Navigator.pushAndRemoveUntil(
                             context,
                             MaterialPageRoute(

@@ -93,7 +93,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Let the wheel decide',
+                  'Let the cards decide',
                   style: theme.textTheme.titleLarge?.copyWith(
                     color: theme.colorScheme.onPrimary.withOpacity(0.8),
                   ),

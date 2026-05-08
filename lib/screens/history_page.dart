@@ -112,7 +112,7 @@ class HistoryPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Your completed activities will appear here. Spin the wheel and mark activities as completed to build your history!',
+              'Your completed activities will appear here. Deal yourself a decision and mark it done to build your history!',
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -123,8 +123,8 @@ class HistoryPage extends StatelessWidget {
               onPressed: () {
                 Navigator.popUntil(context, (route) => route.isFirst);
               },
-              icon: const Icon(Icons.shuffle),
-              label: const Text('Go to Wheel'),
+              icon: const Icon(Icons.style),
+              label: const Text('Deal cards'),
             ),
           ],
         ),

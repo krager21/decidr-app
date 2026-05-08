@@ -132,7 +132,7 @@ class Suggestion {
   /// for user-added entries).
   final String id;
 
-  /// Short display name shown in the wheel and on cards.
+  /// Short display name shown on cards.
   final String title;
 
   /// One-to-two sentence vivid description shown on the reveal card.
