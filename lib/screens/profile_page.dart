@@ -509,12 +509,62 @@ class ProfilePage extends StatelessWidget {
           ),
           const Divider(height: 1),
           ListTile(
+            title: const Text('Start over'),
+            subtitle: const Text(
+              'Reset your preferences and walk through the questionnaire again',
+            ),
+            leading: Icon(
+              Icons.restart_alt,
+              color: theme.colorScheme.primary,
+            ),
+            onTap: () => _showStartOverDialog(context),
+          ),
+          const Divider(height: 1),
+          ListTile(
             title: const Text('About Decidr'),
             subtitle: const Text('Version 2.0.0'),
             leading: const Icon(Icons.info_outline),
             onTap: () {
               _showAboutDialog(context);
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Show start-over confirmation dialog. On confirm, reset preferences
+  // and route the user through the questionnaire fresh.
+  void _showStartOverDialog(BuildContext context) {
+    final preferencesModel =
+        Provider.of<PreferencesModel>(context, listen: false);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Start over?'),
+        content: const Text(
+          'This will clear your activity preference, mood, energy, '
+          'time of day, and weirdness setting. Your favourites, '
+          'history, and rejections are kept.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              preferencesModel.resetPreferences();
+              Navigator.pop(dialogContext);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const QuestionnairePage(),
+                ),
+              );
+            },
+            child: const Text('Start over'),
           ),
         ],
       ),

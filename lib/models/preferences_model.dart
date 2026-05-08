@@ -272,16 +272,17 @@ class PreferencesModel extends ChangeNotifier {
     return favoriteActivities.contains(id);
   }
 
-  /// Reset questionnaire preferences to default values
+  /// Reset questionnaire preferences to default values.
   ///
-  /// Clears activity preference, mood, and time of day.
-  /// Resets energy level to 3.0.
-  /// Theme settings and favorites are not affected.
+  /// Clears activity preference, mood, and time of day. Resets energy
+  /// level to 3.0 and weirdness tolerance to 0.3. Theme settings,
+  /// favorites, history, and feedback are not affected.
   void resetPreferences() {
     activityPreference = null;
     mood = null;
     energyLevel = 3.0;
     timeOfDay = null;
+    weirdnessTolerance = 0.3;
     savePreferences();
     notifyListeners();
   }
