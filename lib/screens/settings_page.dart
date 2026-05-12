@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/preferences_model.dart';
 import '../services/context_service.dart';
+import '../services/weather_service.dart';
 
 /// Settings page with app configuration
 class SettingsPage extends StatelessWidget {
@@ -16,6 +17,8 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         children: [
           _buildThemeSettings(context),
+          const Divider(),
+          _buildPersonalizationSettings(context),
           const Divider(),
           _buildExperienceSettings(context),
           const Divider(),
@@ -88,15 +91,6 @@ class SettingsPage extends StatelessWidget {
             preferencesModel.updatePreference('enableHaptics', value);
           },
         ),
-        SwitchListTile(
-          title: const Text('Auto-detect Time of Day'),
-          subtitle: Text('Currently: ${ContextService.getCurrentTimeOfDay()}'),
-          secondary: Icon(ContextService.getTimeIcon()),
-          value: preferencesModel.autoDetectTime,
-          onChanged: (value) {
-            preferencesModel.updatePreference('autoDetectTime', value);
-          },
-        ),
         ListTile(
           title: const Text('Reset Preferences'),
           subtitle: const Text('Clear your activity preferences'),
@@ -108,7 +102,106 @@ class SettingsPage extends StatelessWidget {
       ],
     );
   }
-  
+
+  // Build personalization section — toggles for context signals
+  // (weather, location, time) that bias the deal. All are opt-in.
+  Widget _buildPersonalizationSettings(BuildContext context) {
+    final theme = Theme.of(context);
+    final prefs = Provider.of<PreferencesModel>(context);
+    final weather = Provider.of<WeatherService>(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            'Personalization',
+            style: theme.textTheme.titleLarge,
+          ),
+        ),
+        SwitchListTile(
+          title: const Text('Weather-aware suggestions'),
+          subtitle: Text(_weatherSubtitle(prefs, weather)),
+          secondary: Icon(_weatherIcon(weather)),
+          value: prefs.useWeather,
+          onChanged: (value) {
+            prefs.setPreference(PreferenceKey.useWeather, value);
+            // When turning on, kick off a fetch immediately so the
+            // user sees the subtitle update without waiting for the
+            // next app launch.
+            if (value && WeatherService.isConfigured) {
+              weather.fetchWeather();
+            }
+          },
+        ),
+        SwitchListTile(
+          title: const Text('Use my location'),
+          subtitle: const Text(
+            'Required for weather and (soon) nearby places',
+          ),
+          secondary: const Icon(Icons.my_location),
+          value: prefs.useLocation,
+          onChanged: (value) {
+            prefs.setPreference(PreferenceKey.useLocation, value);
+          },
+        ),
+        SwitchListTile(
+          title: const Text('Auto-detect Time of Day'),
+          subtitle: Text('Currently: ${ContextService.getCurrentTimeOfDay()}'),
+          secondary: Icon(ContextService.getTimeIcon()),
+          value: prefs.autoDetectTime,
+          onChanged: (value) {
+            prefs.updatePreference('autoDetectTime', value);
+          },
+        ),
+      ],
+    );
+  }
+
+  /// Build the subtitle for the weather toggle, reflecting service
+  /// state so the user can see why their toggle isn't doing anything.
+  String _weatherSubtitle(
+    PreferencesModel prefs,
+    WeatherService weather,
+  ) {
+    if (!WeatherService.isConfigured) {
+      return 'Not configured — set OPENWEATHER_API_KEY at build time';
+    }
+    if (!prefs.useWeather) {
+      return 'Let conditions outside bias the deal';
+    }
+    if (weather.isLoading) {
+      return 'Fetching local weather…';
+    }
+    if (weather.error != null) {
+      return weather.error!;
+    }
+    final data = weather.currentWeather;
+    if (data == null) {
+      return 'On — fetching on next deal';
+    }
+    final temp = data.temperature.round();
+    final condition = _humanizeCondition(data.condition);
+    return 'Currently: $condition, $temp°C';
+  }
+
+  IconData _weatherIcon(WeatherService weather) {
+    final data = weather.currentWeather;
+    if (data == null) return Icons.cloud_outlined;
+    if (data.isRainy) return Icons.umbrella;
+    if (data.isSnowy) return Icons.ac_unit;
+    final c = data.condition.toLowerCase();
+    if (c == 'clear') return Icons.wb_sunny;
+    if (c.contains('cloud')) return Icons.cloud;
+    return Icons.thermostat;
+  }
+
+  String _humanizeCondition(String condition) {
+    if (condition.isEmpty) return 'Unknown';
+    return condition[0].toUpperCase() + condition.substring(1).toLowerCase();
+  }
+
   // Build about section
   Widget _buildAboutSettings(BuildContext context) {
     final theme = Theme.of(context);

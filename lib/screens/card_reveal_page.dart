@@ -10,6 +10,7 @@ import '../models/feedback_model.dart';
 import '../models/preferences_model.dart';
 import '../models/suggestion.dart';
 import '../models/suggestions_repository.dart';
+import '../models/weather_model.dart';
 import '../services/weather_service.dart';
 import '../utils/constants.dart';
 import '../widgets/decision_card.dart';
@@ -408,6 +409,10 @@ class _CardRevealPageState extends State<CardRevealPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final prefs = Provider.of<PreferencesModel>(context);
+    // Listen to the weather service so the thinking-chain medallion
+    // rebuilds when fetched data arrives. We don't read its value
+    // here — `_thinkingItems` does that with listen: false.
+    Provider.of<WeatherService>(context);
 
     if (!prefs.arePreferencesComplete) {
       return Scaffold(
@@ -900,9 +905,10 @@ class _CardRevealPageState extends State<CardRevealPage>
   }
 
   /// Build the list of filter medallions to show in the thinking chain,
-  /// based on the user's current preferences.
+  /// based on the user's current preferences (and any opted-in
+  /// contextual signals like weather).
   List<_ThinkingItem> _thinkingItems(PreferencesModel prefs) {
-    return [
+    final items = <_ThinkingItem>[
       _ThinkingItem(
         icon: _activityIcon(prefs.activityPreference),
         label: prefs.activityPreference ?? '',
@@ -920,6 +926,22 @@ class _CardRevealPageState extends State<CardRevealPage>
         label: prefs.effectiveTimeOfDay,
       ),
     ];
+
+    // Weather medallion is only added when the user has opted in and
+    // there's actual data to show. We read with listen: false because
+    // the parent build method already subscribes to WeatherService.
+    if (prefs.useWeather) {
+      final weather =
+          Provider.of<WeatherService>(context, listen: false).currentWeather;
+      if (weather != null) {
+        items.add(_ThinkingItem(
+          icon: _weatherIcon(weather),
+          label: _weatherLabel(weather),
+        ));
+      }
+    }
+
+    return items;
   }
 
   String _formatDuration(int mins) {
@@ -983,6 +1005,25 @@ IconData _timeIcon(String time) {
     default:
       return Icons.access_time;
   }
+}
+
+IconData _weatherIcon(WeatherData w) {
+  if (w.isRainy) return Icons.umbrella;
+  if (w.isSnowy) return Icons.ac_unit;
+  final c = w.condition.toLowerCase();
+  if (c == 'clear') return Icons.wb_sunny;
+  if (c.contains('cloud')) return Icons.cloud;
+  return Icons.thermostat;
+}
+
+String _weatherLabel(WeatherData w) {
+  if (w.isRainy) return 'Rain';
+  if (w.isSnowy) return 'Snow';
+  final c = w.condition.toLowerCase();
+  if (c == 'clear') return 'Clear';
+  if (c.contains('cloud')) return 'Cloudy';
+  if (c.isEmpty) return 'Weather';
+  return c[0].toUpperCase() + c.substring(1);
 }
 
 /// One filter medallion in the thinking chain.

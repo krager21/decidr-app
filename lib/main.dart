@@ -60,8 +60,17 @@ Future<void> _bootstrap() async {
   // Initialize feedback model
   final feedbackModel = FeedbackModel(prefs);
 
-  // Initialize weather service
+  // Initialize weather service. The fetch only happens here when the
+  // user has opted in (Settings → Personalization → Weather-aware
+  // suggestions) and an OpenWeatherMap API key is configured at build
+  // time. Fire-and-forget — the service is a ChangeNotifier, so the
+  // card-reveal page will pick up the data when it arrives.
   final weatherService = WeatherService();
+  if (preferencesModel.useWeather && WeatherService.isConfigured) {
+    // Don't await; we don't want to block app launch on a network
+    // round-trip. Failures are logged inside the service.
+    unawaited(weatherService.fetchWeather());
+  }
 
   runApp(
     MultiProvider(
