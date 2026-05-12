@@ -4,6 +4,7 @@ import '../models/preferences_model.dart';
 import '../models/suggestions_repository.dart';
 import '../models/activity_history_model.dart';
 import 'questionnaire_page.dart';
+import 'settings_page.dart';
 import '../utils/constants.dart';
 
 /// Profile page with settings and favorites
@@ -472,42 +473,30 @@ class ProfilePage extends StatelessWidget {
   // Build settings card
   Widget _buildSettingsCard(BuildContext context) {
     final theme = Theme.of(context);
-    final preferencesModel = Provider.of<PreferencesModel>(context);
-    
+
     return Card(
       child: Column(
         children: [
-          SwitchListTile(
-            title: const Text('Dark Mode'),
-            subtitle: const Text('Enable dark theme'),
-            secondary: const Icon(Icons.dark_mode),
-            value: preferencesModel.useDarkMode,
-            onChanged: (value) {
-              preferencesModel.updatePreference('useDarkMode', value);
-              preferencesModel.updatePreference('useSystemTheme', false);
-            },
+          // Single entry point to the full Settings page (theme,
+          // personalization, haptics, about, help). Lives here as a
+          // convenience — the same page is reachable via the gear
+          // icon on the Decide AppBar.
+          ListTile(
+            title: const Text('Settings'),
+            subtitle: const Text(
+              'Theme, weather, interests, haptics, and more',
+            ),
+            leading: const Icon(Icons.settings),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SettingsPage(),
+              ),
+            ),
           ),
           const Divider(height: 1),
-          SwitchListTile(
-            title: const Text('Use System Theme'),
-            subtitle: const Text('Follow system dark/light setting'),
-            secondary: const Icon(Icons.settings_system_daydream),
-            value: preferencesModel.useSystemTheme,
-            onChanged: (value) {
-              preferencesModel.updatePreference('useSystemTheme', value);
-            },
-          ),
-          const Divider(height: 1),
-          SwitchListTile(
-            title: const Text('Haptic Feedback'),
-            subtitle: const Text('Vibrate as cards land and flip'),
-            secondary: const Icon(Icons.vibration),
-            value: preferencesModel.enableHaptics,
-            onChanged: (value) {
-              preferencesModel.updatePreference('enableHaptics', value);
-            },
-          ),
-          const Divider(height: 1),
+          // Destructive action kept one tap away — users reach for
+          // it more often than buried-in-Settings would deserve.
           ListTile(
             title: const Text('Start over'),
             subtitle: const Text(
@@ -518,15 +507,6 @@ class ProfilePage extends StatelessWidget {
               color: theme.colorScheme.primary,
             ),
             onTap: () => _showStartOverDialog(context),
-          ),
-          const Divider(height: 1),
-          ListTile(
-            title: const Text('About Decidr'),
-            subtitle: const Text('Version 2.0.0'),
-            leading: const Icon(Icons.info_outline),
-            onTap: () {
-              _showAboutDialog(context);
-            },
           ),
         ],
       ),
@@ -571,30 +551,4 @@ class ProfilePage extends StatelessWidget {
     );
   }
   
-  // Show about dialog
-  void _showAboutDialog(BuildContext context) {
-    showAboutDialog(
-      context: context,
-      applicationName: 'Decidr',
-      applicationVersion: '2.0.0',
-      applicationIcon: Icon(
-        Icons.shuffle_rounded,
-        size: 48,
-        color: Theme.of(context).colorScheme.primary,
-      ),
-      applicationLegalese: '© 2025 Decidr App',
-      children: [
-        const SizedBox(height: 16),
-        const Text(
-          'Decidr helps you make decisions by dealing you three options. '
-          'Get personalised activity suggestions based on your mood, '
-          'energy, and time.',
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Enhanced with Material 3 design, dynamic themes, and personalized suggestions.',
-        ),
-      ],
-    );
-  }
 }
