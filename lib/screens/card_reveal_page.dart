@@ -16,6 +16,7 @@ import '../utils/constants.dart';
 import '../widgets/decision_card.dart';
 import 'interests_picker_page.dart';
 import 'questionnaire_page.dart';
+import 'settings_page.dart';
 
 /// Stages of the card-reveal animation flow.
 enum _RevealStage {
@@ -441,6 +442,16 @@ class _CardRevealPageState extends State<CardRevealPage>
             MaterialPageRoute(builder: (_) => const QuestionnairePage()),
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -494,6 +505,14 @@ class _CardRevealPageState extends State<CardRevealPage>
   }
 
   Widget _buildContextChips(ThemeData theme, PreferencesModel prefs) {
+    // Weather chip is rendered immediately when the toggle is on and a
+    // fetch has completed — surfaces "Clear · 18°C" before the user
+    // even taps to deal. Build() already subscribes to WeatherService,
+    // so this rebuilds when fresh data arrives.
+    final weather = prefs.useWeather
+        ? Provider.of<WeatherService>(context, listen: false).currentWeather
+        : null;
+
     return Wrap(
       spacing: 6,
       runSpacing: 6,
@@ -512,6 +531,11 @@ class _CardRevealPageState extends State<CardRevealPage>
           icon: Icons.bolt,
           label: 'Energy ${prefs.energyLevel.toStringAsFixed(1)}',
         ),
+        if (weather != null)
+          _ContextChip(
+            icon: _weatherIcon(weather),
+            label: '${_weatherLabel(weather)} · ${weather.temperature.round()}°C',
+          ),
         if (prefs.socialContext != null)
           _ContextChip(icon: Icons.people, label: prefs.socialContext!),
         if (prefs.duration != null)
