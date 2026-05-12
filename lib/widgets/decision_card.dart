@@ -1,7 +1,10 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../data/deck_themes.dart';
+import '../models/preferences_model.dart';
 import '../models/suggestion.dart';
 
 /// Visual state of a [DecisionCard] in the tarot-reveal flow.
@@ -126,21 +129,24 @@ class _DecisionCardState extends State<DecisionCard>
   // ─── back face ─────────────────────────────────────────────────
 
   Widget _buildBackFace(ThemeData theme) {
+    // Pull the active deck theme from preferences. Unknown / legacy
+    // ids fall back to the default deck inside themeById, so the
+    // field is safe even when the user has a stale value persisted.
+    final deck = themeById(
+      Provider.of<PreferencesModel>(context).colorTheme,
+    );
     return Container(
       width: widget.width,
       height: widget.height,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1E1B4B), // indigo-950
-            Color(0xFF312E81), // indigo-800
-          ],
+          colors: [deck.back1, deck.back2],
         ),
         border: Border.all(
-          color: const Color(0xFFD4A574).withValues(alpha: 0.55), // gold
+          color: deck.accent.withValues(alpha: 0.55),
           width: 1.5,
         ),
         boxShadow: [
@@ -162,7 +168,7 @@ class _DecisionCardState extends State<DecisionCard>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: const Color(0xFFD4A574).withValues(alpha: 0.32),
+                  color: deck.accent.withValues(alpha: 0.32),
                   width: 1.2,
                 ),
               ),
@@ -174,16 +180,16 @@ class _DecisionCardState extends State<DecisionCard>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: const Color(0xFFD4A574).withValues(alpha: 0.5),
+                  color: deck.accent.withValues(alpha: 0.5),
                   width: 1,
                 ),
               ),
             ),
             // Sparkle emblem.
-            const Icon(
+            Icon(
               Icons.auto_awesome,
               size: 22,
-              color: Color(0xFFD4A574),
+              color: deck.accent,
             ),
           ],
         ),

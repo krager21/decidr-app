@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../data/deck_themes.dart';
 import '../models/preferences_model.dart';
 import '../services/context_service.dart';
 import '../services/weather_service.dart';
@@ -58,13 +59,192 @@ class SettingsPage extends StatelessWidget {
           subtitle: const Text('Enable dark theme'),
           secondary: const Icon(Icons.dark_mode),
           value: preferencesModel.useDarkMode,
-          onChanged: preferencesModel.useSystemTheme 
-              ? null 
+          onChanged: preferencesModel.useSystemTheme
+              ? null
               : (value) {
                   preferencesModel.updatePreference('useDarkMode', value);
                 },
         ),
+        _buildDeckPicker(context, theme, preferencesModel),
       ],
+    );
+  }
+
+  /// Horizontal scroller of card-back theme previews. Tap to select.
+  /// Premium decks route through [_showPremiumComingSoonDialog] today;
+  /// Phase 4 swaps that for the real paywall.
+  Widget _buildDeckPicker(
+    BuildContext context,
+    ThemeData theme,
+    PreferencesModel prefs,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.style,
+                size: 20,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Card deck',
+                style: theme.textTheme.titleMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 150,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: deckThemes.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, i) {
+                final deck = deckThemes[i];
+                final isSelected = prefs.colorTheme == deck.id;
+                return _buildDeckPreview(
+                  context,
+                  theme,
+                  deck,
+                  isSelected,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One deck preview tile — a mini card-back replica with the deck
+  /// name and a "Premium" lock chip when applicable.
+  Widget _buildDeckPreview(
+    BuildContext context,
+    ThemeData theme,
+    DeckTheme deck,
+    bool isSelected,
+  ) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _selectDeck(context, deck),
+      child: SizedBox(
+        width: 84,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 70,
+              height: 110,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [deck.back1, deck.back2],
+                ),
+                border: Border.all(
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : deck.accent.withValues(alpha: 0.5),
+                  width: isSelected ? 2.5 : 1,
+                ),
+                boxShadow: [
+                  if (isSelected)
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: deck.accent.withValues(alpha: 0.45),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.auto_awesome,
+                    size: 16,
+                    color: deck.accent,
+                  ),
+                  if (deck.isPremium)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withValues(alpha: 0.55),
+                        ),
+                        child: const Icon(
+                          Icons.lock,
+                          size: 10,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              deck.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight:
+                    isSelected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Apply [deck] if it's free; otherwise route through the (stub for
+  /// now) premium gate. Phase 4 replaces the dialog with the real
+  /// paywall once entitlements are wired.
+  void _selectDeck(BuildContext context, DeckTheme deck) {
+    final prefs = Provider.of<PreferencesModel>(context, listen: false);
+    if (!deck.isPremium) {
+      prefs.setPreference(PreferenceKey.colorTheme, deck.id);
+      return;
+    }
+    _showPremiumComingSoonDialog(context, deck);
+  }
+
+  void _showPremiumComingSoonDialog(BuildContext context, DeckTheme deck) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Decidr Premium'),
+        content: Text(
+          'The "${deck.name}" deck is part of Decidr Premium — coming '
+          'soon. We\u2019ll let you know when it lands.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
     );
   }
 
