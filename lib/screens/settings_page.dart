@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/preferences_model.dart';
 import '../services/context_service.dart';
 import '../services/weather_service.dart';
+import 'interests_picker_page.dart';
 
 /// Settings page with app configuration
 class SettingsPage extends StatelessWidget {
@@ -153,6 +154,23 @@ class SettingsPage extends StatelessWidget {
           value: prefs.autoDetectTime,
           onChanged: (value) {
             prefs.updatePreference('autoDetectTime', value);
+          },
+        ),
+        ListTile(
+          title: const Text('Your interests'),
+          subtitle: Text(
+            prefs.userInterests.isEmpty
+                ? 'Tag what you\u2019re into — biases the deal'
+                : '${prefs.userInterests.length} selected',
+          ),
+          leading: const Icon(Icons.interests),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const InterestsPickerPage(),
+              ),
+            );
           },
         ),
       ],

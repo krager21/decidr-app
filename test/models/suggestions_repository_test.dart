@@ -324,6 +324,60 @@ void main() {
       );
       expect(results.length, lessThanOrEqualTo(3));
     });
+
+    test('user interests soft-bias results toward matching tags', () {
+      // Compare the reading-tagged share between (a) no interest signal
+      // and (b) userInterests=['reading']. The Jaccard multiplier is
+      // gentle (0.5 floor, dilutes when an entry carries many tags)
+      // so we assert a *relative* lift over the baseline, not an
+      // absolute share — much more robust to top-band shuffle noise
+      // and catalog-tag distribution.
+      const samples = 6;
+
+      int countReadingHits(List<String> interests) {
+        var hits = 0;
+        for (var i = 0; i < samples; i++) {
+          final r = repo.getStructuredSuggestions(
+            activityType: ActivityType.indoor,
+            mood: Mood.relaxed,
+            timeOfDay: TimeOfDayPref.evening,
+            energyLevel: 2.0,
+            userInterests: interests,
+            count: 8,
+          );
+          for (final s in r) {
+            if (s.interests.contains(Interests.reading)) hits++;
+          }
+        }
+        return hits;
+      }
+
+      final baseline = countReadingHits(const []);
+      final boosted = countReadingHits(const [Interests.reading]);
+
+      expect(boosted, greaterThan(baseline),
+          reason: 'Reading-tagged hits should rise when the user picks '
+              '"reading" as an interest. baseline=$baseline, '
+              'boosted=$boosted (samples=$samples × count=8)');
+    });
+
+    test('user interests with zero catalog overlap still yield results', () {
+      // 'tech' is a real Interests constant but unlikely to be tagged
+      // on many indoor/relaxed entries. With every entry sitting at
+      // the 0.5 affinity floor, scoring degenerates to weirdness ×
+      // energy × feedback — i.e., behaves as if no interest signal
+      // were given. The user must still get cards dealt.
+      final results = repo.getStructuredSuggestions(
+        activityType: ActivityType.indoor,
+        mood: Mood.relaxed,
+        timeOfDay: TimeOfDayPref.evening,
+        energyLevel: 2.0,
+        userInterests: const [Interests.tech],
+        count: 5,
+      );
+      expect(results, isNotEmpty,
+          reason: 'Zero-overlap interests must not starve the pool');
+    });
   });
 
   group('Legacy string API', () {

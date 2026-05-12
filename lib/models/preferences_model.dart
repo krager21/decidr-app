@@ -21,7 +21,10 @@ enum PreferenceKey {
   colorTheme('colorTheme'),
   weirdnessTolerance('weirdnessTolerance'),
   useWeather('useWeather'),
-  useLocation('useLocation');
+  useLocation('useLocation'),
+  userInterests('userInterests'),
+  firstDealCompleted('firstDealCompleted'),
+  interestsPromptDismissed('interestsPromptDismissed');
 
   /// The SharedPreferences key used to persist this preference.
   final String storageKey;
@@ -122,6 +125,25 @@ class PreferencesModel extends ChangeNotifier {
   /// Defaults to false (opt-in).
   bool useLocation = false;
 
+  /// User's stable interests — values from the `Interests` constants
+  /// class (e.g., 'nature', 'cooking', 'reading'). Soft-biases the
+  /// score via a Jaccard overlap multiplier in the filter pipeline,
+  /// so picks favor matching entries without starving the pool.
+  ///
+  /// Empty (the default) means "no interest signal" — the scoring
+  /// term collapses to 1.0 and behavior is unchanged.
+  List<String> userInterests = [];
+
+  /// Whether the user has completed their first deal in this install.
+  /// Used to gate the "tag your interests" onboarding banner so it
+  /// doesn't shout at the user before they've seen what the app does.
+  bool firstDealCompleted = false;
+
+  /// Whether the user has dismissed the "tag your interests" banner.
+  /// Once dismissed, the banner never reappears — they can still
+  /// reach the picker via Settings → Personalization.
+  bool interestsPromptDismissed = false;
+
   /// List of suggestion **ids** marked as favorites by the user.
   ///
   /// Post-Phase-3, values are stable [Suggestion] ids (catalog slugs
@@ -187,6 +209,10 @@ class PreferencesModel extends ChangeNotifier {
         _prefs.getDouble('weirdnessTolerance')?.clamp(0.0, 1.0) ?? 0.3;
     useWeather = _prefs.getBool('useWeather') ?? false;
     useLocation = _prefs.getBool('useLocation') ?? false;
+    userInterests = _prefs.getStringList('userInterests') ?? [];
+    firstDealCompleted = _prefs.getBool('firstDealCompleted') ?? false;
+    interestsPromptDismissed =
+        _prefs.getBool('interestsPromptDismissed') ?? false;
     favoriteActivities = _prefs.getStringList('favoriteActivities') ?? [];
     notifyListeners();
   }
@@ -228,6 +254,9 @@ class PreferencesModel extends ChangeNotifier {
     await _prefs.setDouble('weirdnessTolerance', weirdnessTolerance);
     await _prefs.setBool('useWeather', useWeather);
     await _prefs.setBool('useLocation', useLocation);
+    await _prefs.setStringList('userInterests', userInterests);
+    await _prefs.setBool('firstDealCompleted', firstDealCompleted);
+    await _prefs.setBool('interestsPromptDismissed', interestsPromptDismissed);
     await _prefs.setStringList('favoriteActivities', favoriteActivities);
   }
   
@@ -280,6 +309,15 @@ class PreferencesModel extends ChangeNotifier {
         break;
       case PreferenceKey.useLocation:
         useLocation = value as bool;
+        break;
+      case PreferenceKey.userInterests:
+        userInterests = List<String>.from(value as Iterable);
+        break;
+      case PreferenceKey.firstDealCompleted:
+        firstDealCompleted = value as bool;
+        break;
+      case PreferenceKey.interestsPromptDismissed:
+        interestsPromptDismissed = value as bool;
         break;
     }
     savePreferences();

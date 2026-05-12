@@ -14,6 +14,7 @@ import '../models/weather_model.dart';
 import '../services/weather_service.dart';
 import '../utils/constants.dart';
 import '../widgets/decision_card.dart';
+import 'interests_picker_page.dart';
 import 'questionnaire_page.dart';
 
 /// Stages of the card-reveal animation flow.
@@ -215,6 +216,7 @@ class _CardRevealPageState extends State<CardRevealPage>
       feedback: feedback,
       favoriteIds: prefs.favoriteActivities,
       weirdnessTolerance: prefs.weirdnessTolerance,
+      userInterests: prefs.userInterests,
       excludeIds: _shownInSession,
       count: 9,
     );
@@ -323,6 +325,13 @@ class _CardRevealPageState extends State<CardRevealPage>
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
     if (prefs.enableHaptics) {
       HapticFeedback.heavyImpact();
+    }
+    // Mark the user as having seen at least one deal. Onboarding
+    // surfaces (like the "tag your interests" banner) gate on this
+    // so we never shout at the user before they've experienced the
+    // app once. Idempotent — safe to call on every settle.
+    if (!prefs.firstDealCompleted) {
+      prefs.setPreference(PreferenceKey.firstDealCompleted, true);
     }
   }
 
@@ -440,6 +449,7 @@ class _CardRevealPageState extends State<CardRevealPage>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildContextChips(theme, prefs),
+              _buildInterestsPrompt(theme, prefs),
               const SizedBox(height: 18),
               // Content scrolls so the settled-state description doesn't
               // overflow on shorter windows (macOS, small phones).
@@ -878,6 +888,78 @@ class _CardRevealPageState extends State<CardRevealPage>
     );
   }
 
+  /// One-shot soft prompt nudging the user to tag interests after
+  /// their first deal completes. Renders nothing unless all three
+  /// conditions hold: they haven't picked any interests, they've
+  /// completed at least one deal, and they haven't dismissed the
+  /// prompt before. Dismiss persists, so the banner only ever
+  /// appears once per install.
+  Widget _buildInterestsPrompt(ThemeData theme, PreferencesModel prefs) {
+    final shouldShow = prefs.firstDealCompleted &&
+        prefs.userInterests.isEmpty &&
+        !prefs.interestsPromptDismissed;
+    if (!shouldShow) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Material(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.interests,
+                    size: 20,
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Tag what you\u2019re into so we deal you better cards.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      prefs.setPreference(
+                        PreferenceKey.interestsPromptDismissed,
+                        true,
+                      );
+                    },
+                    child: const Text('Not now'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const InterestsPickerPage(),
+                        ),
+                      );
+                    },
+                    child: const Text('Pick interests'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Reserves a fixed-height slot above the cards row that hosts the
   /// thinking chain. The chain is hidden in idle/empty (haven't dealt
   /// yet), pulses during considering, and stays visible-but-quiet
@@ -939,6 +1021,15 @@ class _CardRevealPageState extends State<CardRevealPage>
           label: _weatherLabel(weather),
         ));
       }
+    }
+
+    if (prefs.userInterests.isNotEmpty) {
+      items.add(_ThinkingItem(
+        icon: Icons.interests,
+        label: prefs.userInterests.length == 1
+            ? '1 interest'
+            : '${prefs.userInterests.length} interests',
+      ));
     }
 
     return items;

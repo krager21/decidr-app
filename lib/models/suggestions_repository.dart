@@ -294,6 +294,17 @@ class SuggestionsRepository extends ChangeNotifier {
     /// novelty wins (and both extremes are softly penalised).
     double weirdnessTolerance = 0.3,
 
+    /// User's stable interests (catalog-tag strings from `Interests.*`).
+    /// Soft-biases the score via a Jaccard overlap multiplier:
+    ///
+    ///   interestAffinity = empty ? 1.0
+    ///                            : 0.5 + 0.5 × jaccard(user, suggestion)
+    ///
+    /// Floor at 0.5 keeps zero-overlap entries surfacable so power-users
+    /// with niche picks aren't starved. Empty list collapses the term to
+    /// 1.0 (no effect).
+    List<String> userInterests = const [],
+
     /// Suggestion ids to filter out — typically the ones already
     /// shown in the current session, to keep deals varied. The
     /// exclusion goes through the same graceful-degradation pattern
@@ -304,6 +315,9 @@ class SuggestionsRepository extends ChangeNotifier {
     Set<String> excludeIds = const {},
     int count = SuggestionConstants.defaultSuggestionsCount,
   }) {
+    // Pre-compute the user-interest set once for Stage 4's Jaccard
+    // multiplier. An empty set short-circuits the scoring term to 1.0.
+    final userInterestSet = userInterests.toSet();
     // Stage 1: base filter — activity type + mood.
     var pool = catalog
         .where((s) => s.activityType == activityType && s.moods.contains(mood))
@@ -355,9 +369,12 @@ class SuggestionsRepository extends ChangeNotifier {
           .toList();
     }
 
-    // Stage 4: score by energy proximity × feedback weight × weirdness affinity.
-    // Weirdness affinity = 1 − |s.weirdness − tolerance|, clamped to [0,1].
-    // At tolerance 0 mainstream wins; at 1, weird wins.
+    // Stage 4: score by energy proximity × feedback weight × weirdness
+    // affinity × interest affinity.
+    // - Weirdness affinity = 1 − |s.weirdness − tolerance|, clamped [0,1].
+    // - Interest affinity  = 1.0 when user picked no interests; otherwise
+    //   0.5 + 0.5 × jaccard(user, s.interests). The 0.5 floor keeps the
+    //   pool surfacable for niche picks.
     final scored = <_ScoredSuggestion>[];
     for (final s in pool) {
       final delta = (s.energyLevel - energyLevel).abs();
@@ -365,9 +382,12 @@ class SuggestionsRepository extends ChangeNotifier {
       final fbWeight = feedback?.getActivityWeight(s.id) ?? 1.0;
       final weirdAffinity =
           (1.0 - (s.weirdness - weirdnessTolerance).abs()).clamp(0.0, 1.0);
+      final interestAffinity = userInterestSet.isEmpty
+          ? 1.0
+          : 0.5 + 0.5 * _jaccard(userInterestSet, s.interests);
       scored.add(_ScoredSuggestion(
         s,
-        energyScore * fbWeight * weirdAffinity,
+        energyScore * fbWeight * weirdAffinity * interestAffinity,
       ));
     }
 
@@ -461,6 +481,20 @@ class SuggestionsRepository extends ChangeNotifier {
   // ──────────────────────────────────────────────────────────────
   // Helpers
   // ──────────────────────────────────────────────────────────────
+
+  /// Jaccard similarity between [user] (a set of interest strings) and
+  /// [suggestion]'s tagged interests. Returns 0.0 when [suggestion] has
+  /// no interests, or when the intersection is empty. Defined as
+  /// `|A ∩ B| / |A ∪ B|`. Both inputs are expected to use the canonical
+  /// `Interests.*` constants — no case folding is performed.
+  double _jaccard(Set<String> user, List<String> suggestion) {
+    if (suggestion.isEmpty) return 0.0;
+    final sSet = suggestion.toSet();
+    final intersection = user.intersection(sSet).length;
+    if (intersection == 0) return 0.0;
+    final union = user.union(sSet).length;
+    return intersection / union;
+  }
 
   /// Apply [filter] to [pool], but reject the result if it shrinks
   /// the pool below [SuggestionConstants.minFilteredSuggestionsCount].
