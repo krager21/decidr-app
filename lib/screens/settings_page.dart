@@ -4,6 +4,7 @@ import '../data/deck_themes.dart';
 import '../models/preferences_model.dart';
 import '../services/context_service.dart';
 import '../services/weather_service.dart';
+import '../widgets/premium_gate.dart';
 import 'interests_picker_page.dart';
 
 /// Settings page with app configuration
@@ -217,34 +218,18 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  /// Apply [deck] if it's free; otherwise route through the (stub for
-  /// now) premium gate. Phase 4 replaces the dialog with the real
-  /// paywall once entitlements are wired.
+  /// Apply [deck] if it's free or the user is premium; otherwise
+  /// route through the shared premium-gate dialog. Phase 4 replaces
+  /// the dialog with the real paywall once entitlements are wired.
   void _selectDeck(BuildContext context, DeckTheme deck) {
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
-    if (!deck.isPremium) {
+    if (!deck.isPremium || hasPremium()) {
       prefs.setPreference(PreferenceKey.colorTheme, deck.id);
       return;
     }
-    _showPremiumComingSoonDialog(context, deck);
-  }
-
-  void _showPremiumComingSoonDialog(BuildContext context, DeckTheme deck) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Decidr Premium'),
-        content: Text(
-          'The "${deck.name}" deck is part of Decidr Premium — coming '
-          'soon. We\u2019ll let you know when it lands.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+    showPremiumComingSoonDialog(
+      context,
+      featureName: 'The "${deck.name}" deck',
     );
   }
 

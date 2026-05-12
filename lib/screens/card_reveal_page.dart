@@ -13,8 +13,11 @@ import '../models/suggestions_repository.dart';
 import '../models/weather_model.dart';
 import '../services/weather_service.dart';
 import '../utils/constants.dart';
+import '../data/interest_places_map.dart';
 import '../widgets/decision_card.dart';
+import '../widgets/premium_gate.dart';
 import 'interests_picker_page.dart';
+import 'nearby_sheet.dart';
 import 'questionnaire_page.dart';
 import 'settings_page.dart';
 
@@ -753,23 +756,81 @@ class _CardRevealPageState extends State<CardRevealPage>
           ],
         ),
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
             TextButton.icon(
               onPressed: _deal,
               icon: const Icon(Icons.refresh, size: 18),
               label: const Text('Deal again'),
             ),
-            const SizedBox(width: 8),
             TextButton.icon(
               onPressed: _showAddCardDialog,
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add your own'),
             ),
+            // Only surface "Nearby" when the chosen suggestion's
+            // interests (plus the user's) resolve to at least one
+            // OSM-queryable category. Suggestions like "build a
+            // Lego castle" have no place-side mapping and shouldn't
+            // imply there's something nearby to find.
+            if (_hasNearbyForChosen(chosen))
+              TextButton.icon(
+                onPressed: () => _showNearby(chosen),
+                icon: const Icon(Icons.near_me, size: 18),
+                label: const Text('Nearby'),
+              ),
           ],
         ),
       ],
+    );
+  }
+
+  /// True if the chosen card + user's interests resolve to at least
+  /// one [PlaceCategory] worth showing in the Nearby sheet.
+  bool _hasNearbyForChosen(Suggestion chosen) {
+    final prefs = Provider.of<PreferencesModel>(context, listen: false);
+    final all = <String>{...chosen.interests, ...prefs.userInterests};
+    return resolveCategories(all).isNotEmpty;
+  }
+
+  /// Premium-gated entry point for the Nearby sheet. Free users see
+  /// the placeholder upsell dialog; premium users get the sheet, or
+  /// a prompt to enable location if their toggle is off.
+  Future<void> _showNearby(Suggestion chosen) async {
+    if (!hasPremium()) {
+      await showPremiumComingSoonDialog(
+        context,
+        featureName: 'Nearby places',
+      );
+      return;
+    }
+    final prefs = Provider.of<PreferencesModel>(context, listen: false);
+    if (!prefs.useLocation) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Location off'),
+          content: const Text(
+            'Turn on \u201cUse my location\u201d in Settings \u2192 '
+            'Personalization to see nearby places.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    await showNearbySheet(
+      context,
+      suggestion: chosen,
+      userInterests: prefs.userInterests,
     );
   }
 
