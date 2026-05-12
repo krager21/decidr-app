@@ -33,7 +33,19 @@ Future<void> showPremiumComingSoonDialog(
 
 /// Whether the user has unlocked premium features.
 ///
-/// Stub for Phase 3/6 — always returns false. Phase 4 replaces this
-/// with a real check against the entitlements service so the same
-/// call sites continue to work.
-bool hasPremium() => false;
+/// Stub for Phase 3/6 — Phase 4 will replace this body with a real
+/// check against RevenueCat's entitlements. Until then, premium is
+/// off by default, but a `--dart-define=DECIDR_PREMIUM_OVERRIDE=true`
+/// flag lets you flip it on at build time for end-to-end testing of
+/// premium-gated features (nearby places, themed decks) without
+/// waiting on the real paywall.
+///
+/// Usage:
+///   flutter run --dart-define=DECIDR_PREMIUM_OVERRIDE=true [...]
+bool hasPremium() {
+  const override = bool.fromEnvironment(
+    'DECIDR_PREMIUM_OVERRIDE',
+    defaultValue: false,
+  );
+  return override;
+}
