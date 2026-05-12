@@ -28,5 +28,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Decidr uses your location to fetch local weather, so suggestions can match the conditions outside.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Decidr uses your location to fetch local weather, so suggestions can match the conditions outside.</string>
 </dict>
 </plist>

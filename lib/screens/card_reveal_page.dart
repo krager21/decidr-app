@@ -183,8 +183,12 @@ class _CardRevealPageState extends State<CardRevealPage>
   List<Suggestion>? _buildPool() {
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
     final repo = Provider.of<SuggestionsRepository>(context, listen: false);
-    final weather =
-        Provider.of<WeatherService>(context, listen: false).currentWeather;
+    // Weather is opt-in via the Personalization toggle. When off we
+    // pass null so the filter pipeline skips its weather stage
+    // entirely — and the WeatherService is never read or called.
+    final weather = prefs.useWeather
+        ? Provider.of<WeatherService>(context, listen: false).currentWeather
+        : null;
     final feedback = Provider.of<FeedbackModel>(context, listen: false);
 
     if (!prefs.arePreferencesComplete) return null;

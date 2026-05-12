@@ -19,7 +19,9 @@ enum PreferenceKey {
   useSystemTheme('useSystemTheme'),
   enableHaptics('enableHaptics'),
   colorTheme('colorTheme'),
-  weirdnessTolerance('weirdnessTolerance');
+  weirdnessTolerance('weirdnessTolerance'),
+  useWeather('useWeather'),
+  useLocation('useLocation');
 
   /// The SharedPreferences key used to persist this preference.
   final String storageKey;
@@ -97,6 +99,29 @@ class PreferencesModel extends ChangeNotifier {
   /// comfortable with a touch of novelty.
   double weirdnessTolerance = 0.3;
 
+  /// Whether to let live weather conditions bias the deal.
+  ///
+  /// When true, the card-reveal page reads from [WeatherService] and
+  /// passes the current weather into the filter pipeline so outdoor
+  /// suggestions get a soft penalty when it's raining, etc. When false
+  /// the pipeline ignores weather entirely — no API call fires.
+  ///
+  /// Defaults to false (opt-in) — fetching weather requires the user
+  /// to grant location permission and configure an OpenWeatherMap API
+  /// key, so we never silently use it.
+  bool useWeather = false;
+
+  /// Whether to let the app use the user's location for context.
+  ///
+  /// Today only the weather feature consumes location, but the
+  /// upcoming "nearby places" feature will also gate on this toggle.
+  /// Keeping it separate from [useWeather] lets the user opt into
+  /// weather without committing to other location-dependent features
+  /// (and vice versa).
+  ///
+  /// Defaults to false (opt-in).
+  bool useLocation = false;
+
   /// List of suggestion **ids** marked as favorites by the user.
   ///
   /// Post-Phase-3, values are stable [Suggestion] ids (catalog slugs
@@ -160,6 +185,8 @@ class PreferencesModel extends ChangeNotifier {
     colorTheme = _prefs.getString('colorTheme') ?? 'rainbow';
     weirdnessTolerance =
         _prefs.getDouble('weirdnessTolerance')?.clamp(0.0, 1.0) ?? 0.3;
+    useWeather = _prefs.getBool('useWeather') ?? false;
+    useLocation = _prefs.getBool('useLocation') ?? false;
     favoriteActivities = _prefs.getStringList('favoriteActivities') ?? [];
     notifyListeners();
   }
@@ -199,6 +226,8 @@ class PreferencesModel extends ChangeNotifier {
     await _prefs.setBool('enableHaptics', enableHaptics);
     await _prefs.setString('colorTheme', colorTheme);
     await _prefs.setDouble('weirdnessTolerance', weirdnessTolerance);
+    await _prefs.setBool('useWeather', useWeather);
+    await _prefs.setBool('useLocation', useLocation);
     await _prefs.setStringList('favoriteActivities', favoriteActivities);
   }
   
@@ -245,6 +274,12 @@ class PreferencesModel extends ChangeNotifier {
         break;
       case PreferenceKey.weirdnessTolerance:
         weirdnessTolerance = (value as double).clamp(0.0, 1.0);
+        break;
+      case PreferenceKey.useWeather:
+        useWeather = value as bool;
+        break;
+      case PreferenceKey.useLocation:
+        useLocation = value as bool;
         break;
     }
     savePreferences();
