@@ -10,6 +10,7 @@ import 'models/suggestions_repository.dart';
 import 'models/activity_history_model.dart';
 import 'models/feedback_model.dart';
 import 'services/migration_service.dart';
+import 'services/places_service.dart';
 import 'services/weather_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/settings_page.dart';
@@ -80,6 +81,7 @@ Future<void> _bootstrap() async {
         ChangeNotifierProvider(create: (_) => ActivityHistoryModel(prefs)),
         ChangeNotifierProvider(create: (_) => feedbackModel),
         ChangeNotifierProvider(create: (_) => weatherService),
+        ChangeNotifierProvider(create: (_) => PlacesService()),
       ],
       child: const DecidrApp(),
     ),
