@@ -138,7 +138,9 @@ class WeatherService extends ChangeNotifier {
 
       // Get current position
       return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+        ),
       );
     } catch (e) {
       debugPrint('Error getting location: $e');

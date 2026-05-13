@@ -264,7 +264,9 @@ class PlacesService extends ChangeNotifier {
       }
 
       return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+        ),
       );
     } catch (e) {
       _error = 'Error getting location: $e';
