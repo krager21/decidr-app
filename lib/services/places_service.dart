@@ -40,6 +40,15 @@ class PlacesService extends ChangeNotifier {
   /// distance sort.
   static const maxResultsPerCategory = 20;
 
+  /// Overpass mirrors to try in order. The first one is generally
+  /// the fastest community mirror; the canonical `overpass-api.de`
+  /// endpoint follows as a fallback (it's reliable but heavily
+  /// rate-limited during peak hours). Both expose the same API.
+  static const List<String> _overpassEndpoints = [
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass-api.de/api/interpreter',
+  ];
+
   bool _isLoading = false;
   String? _error;
 
@@ -85,21 +94,12 @@ class PlacesService extends ChangeNotifier {
 
     try {
       final query = _buildOverpassQuery(category, lat, lon, radiusMeters);
-      final response = await _httpClient.post(
-        Uri.parse('https://overpass-api.de/api/interpreter'),
-        headers: const {
-          // Overpass occasionally rejects bare requests with 406. An
-          // explicit User-Agent + Accept makes us look like a normal
-          // client and gets us through. (Required by OSM TOS too.)
-          'User-Agent': 'Decidr/2.0 (https://github.com/krager21/decidr-app)',
-          'Accept': 'application/json',
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'data=${Uri.encodeQueryComponent(query)}',
-      );
+      final response = await _postWithFailover(query);
 
-      if (response.statusCode != 200) {
-        _error = 'Overpass returned ${response.statusCode}';
+      if (response == null || response.statusCode != 200) {
+        _error = response == null
+            ? 'All Overpass mirrors timed out or refused the request'
+            : 'Overpass returned ${response.statusCode}';
         debugPrint(_error);
         _isLoading = false;
         notifyListeners();
@@ -120,6 +120,57 @@ class PlacesService extends ChangeNotifier {
       notifyListeners();
       return const [];
     }
+  }
+
+  /// POST [query] to each Overpass mirror in [_overpassEndpoints] in
+  /// order, returning the first 2xx response. On 504 / 502 / 429
+  /// we move to the next mirror — the public `overpass-api.de`
+  /// endpoint times out under load fairly often, so falling back
+  /// to a community mirror keeps the UX usable.
+  ///
+  /// Returns null if every mirror failed in a way we want to retry,
+  /// or the most recent non-2xx response if we exhausted the list.
+  /// Any thrown exception (network, parse) propagates to the caller.
+  Future<http.Response?> _postWithFailover(String query) async {
+    http.Response? lastResponse;
+    final body = 'data=${Uri.encodeQueryComponent(query)}';
+
+    for (final endpoint in _overpassEndpoints) {
+      try {
+        final response = await _httpClient.post(
+          Uri.parse(endpoint),
+          headers: const {
+            // Overpass rejects bare requests with 406. An explicit
+            // User-Agent + Accept makes us look like a normal client
+            // (required by OSM TOS too).
+            'User-Agent':
+                'Decidr/2.0 (https://github.com/krager21/decidr-app)',
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: body,
+        );
+
+        if (response.statusCode == 200) {
+          return response;
+        }
+
+        lastResponse = response;
+        // 504 / 502 / 429 → try the next mirror. Anything else
+        // (4xx that isn't 429, etc.) is the same regardless of
+        // mirror, so don't waste a request.
+        if (response.statusCode != 504 &&
+            response.statusCode != 502 &&
+            response.statusCode != 429) {
+          break;
+        }
+        debugPrint(
+            'Overpass $endpoint returned ${response.statusCode}; trying next mirror');
+      } catch (e) {
+        debugPrint('Overpass $endpoint threw $e; trying next mirror');
+      }
+    }
+    return lastResponse;
   }
 
   /// Fetch nearby places across [categories], sharing one location
