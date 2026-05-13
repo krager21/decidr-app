@@ -87,7 +87,15 @@ class PlacesService extends ChangeNotifier {
       final query = _buildOverpassQuery(category, lat, lon, radiusMeters);
       final response = await _httpClient.post(
         Uri.parse('https://overpass-api.de/api/interpreter'),
-        body: {'data': query},
+        headers: const {
+          // Overpass occasionally rejects bare requests with 406. An
+          // explicit User-Agent + Accept makes us look like a normal
+          // client and gets us through. (Required by OSM TOS too.)
+          'User-Agent': 'Decidr/2.0 (https://github.com/krager21/decidr-app)',
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'data=${Uri.encodeQueryComponent(query)}',
       );
 
       if (response.statusCode != 200) {
@@ -161,9 +169,12 @@ class PlacesService extends ChangeNotifier {
     // Querying node + way + relation surfaces both pinned points
     // (most cafes, museums) and larger areas (parks tagged as
     // polygons). nwr = node + way + relation.
+    //
+    // radius is rendered as an integer — Overpass historically
+    // rejects decimal radii with 400/406 on some endpoints.
     return '[out:json][timeout:25];'
         'nwr["${category.osmKey}"="${category.osmValue}"]'
-        '(around:$radius,$lat,$lon);'
+        '(around:${radius.toInt()},$lat,$lon);'
         'out center $maxResultsPerCategory;';
   }
 
@@ -241,6 +252,7 @@ class PlacesService extends ChangeNotifier {
   Future<Position?> _getCurrentPosition() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      debugPrint('[PlacesService] isLocationServiceEnabled: $serviceEnabled');
       if (!serviceEnabled) {
         _error = 'Location services are disabled';
         debugPrint(_error);
@@ -248,8 +260,10 @@ class PlacesService extends ChangeNotifier {
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
+      debugPrint('[PlacesService] checkPermission returned: $permission');
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        debugPrint('[PlacesService] requestPermission returned: $permission');
         if (permission == LocationPermission.denied) {
           _error = 'Location permission denied';
           debugPrint(_error);
@@ -263,11 +277,14 @@ class PlacesService extends ChangeNotifier {
         return null;
       }
 
-      return await Geolocator.getCurrentPosition(
+      debugPrint('[PlacesService] calling getCurrentPosition...');
+      final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.low,
         ),
       );
+      debugPrint('[PlacesService] got position: ${pos.latitude}, ${pos.longitude}');
+      return pos;
     } catch (e) {
       _error = 'Error getting location: $e';
       debugPrint(_error);
