@@ -780,6 +780,7 @@ const List<Suggestion> _curatedSuggestions = [
     durationMinutes: 60,
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['reading', 'restful', 'screen-free'],
+    goOutCategory: PlaceCategory.park,
   ),
   Suggestion(
     id: 'cloud-watching',
@@ -809,6 +810,7 @@ const List<Suggestion> _curatedSuggestions = [
     durationMinutes: 90,
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['nature', 'mindful'],
+    goOutCategory: PlaceCategory.garden,
   ),
   Suggestion(
     id: 'stargazing',
@@ -853,6 +855,7 @@ const List<Suggestion> _curatedSuggestions = [
     durationMinutes: 90,
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['walking', 'food'],
+    goOutCategory: PlaceCategory.cafe,
   ),
   Suggestion(
     id: 'sit-by-fountain',
@@ -925,6 +928,7 @@ const List<Suggestion> _curatedSuggestions = [
     durationMinutes: 90,
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['art', 'culture'],
+    goOutCategory: PlaceCategory.garden,
   ),
 
   // ──────────────────────────────────────────────────────────────
@@ -1349,6 +1353,7 @@ const List<Suggestion> _curatedSuggestions = [
     durationMinutes: 30,
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['games', 'physical', 'free'],
+    goOutCategory: PlaceCategory.park,
   ),
   Suggestion(
     id: 'pickup-pickleball',
@@ -1378,6 +1383,7 @@ const List<Suggestion> _curatedSuggestions = [
     durationMinutes: 180,
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['music', 'community'],
+    goOutCategory: PlaceCategory.park,
   ),
   Suggestion(
     id: 'group-bike-ride',
@@ -1917,6 +1923,7 @@ const List<Suggestion> _curatedSuggestions = [
     durationMinutes: 60,
     weather: WeatherTolerance.any,
     tags: ['connection'],
+    goOutCategory: PlaceCategory.cafe,
   ),
   Suggestion(
     id: 'book-club',
@@ -2240,6 +2247,7 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.any,
     tags: ['culture'],
     interests: [Interests.culture, Interests.learning, Interests.art],
+    goOutCategory: PlaceCategory.museum,
   ),
   Suggestion(
     id: 'learn-magic-trick',
@@ -2353,6 +2361,7 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['walking', 'free'],
     interests: [Interests.exploration, Interests.walking],
+    goOutCategory: PlaceCategory.viewpoint,
   ),
   Suggestion(
     id: 'wander-new-neighborhood',
@@ -2431,6 +2440,7 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['physical', 'free'],
     interests: [Interests.sports, Interests.fitness],
+    goOutCategory: PlaceCategory.sportsCentre,
   ),
   Suggestion(
     id: 'pickup-basketball-court',
@@ -2446,6 +2456,7 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['physical', 'community', 'free'],
     interests: [Interests.sports, Interests.fitness, Interests.community],
+    goOutCategory: PlaceCategory.park,
   ),
   Suggestion(
     id: 'studio-yoga-class',
@@ -2491,6 +2502,7 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.indoorOnly,
     tags: ['fitness', 'mindful'],
     interests: [Interests.fitness, Interests.mindfulness],
+    goOutCategory: PlaceCategory.swimmingPool,
   ),
   Suggestion(
     id: 'boxing-class',
@@ -2521,6 +2533,7 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.any,
     tags: ['fitness', 'physical'],
     interests: [Interests.fitness, Interests.sports, Interests.adventure],
+    goOutCategory: PlaceCategory.gym,
   ),
 
   // ─── Try something new ────────────────────────────────────────
@@ -2869,6 +2882,7 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['community', 'free'],
     interests: [Interests.community, Interests.connection],
+    goOutCategory: PlaceCategory.park,
   ),
   Suggestion(
     id: 'attend-public-lecture',
@@ -3517,6 +3531,7 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['food', 'mindful'],
     interests: [Interests.food, Interests.nature, Interests.mindfulness],
+    goOutCategory: PlaceCategory.park,
   ),
   Suggestion(
     id: 'visit-dog-park-no-dog',
@@ -3532,6 +3547,7 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['mindful', 'free'],
     interests: [Interests.mindfulness, Interests.community],
+    goOutCategory: PlaceCategory.park,
   ),
   Suggestion(
     id: 'sit-by-water',
