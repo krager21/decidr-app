@@ -1,4 +1,5 @@
 import '../models/suggestion.dart';
+import 'place_categories.dart';
 
 /// The "weird tail" — 200 eccentric, off-the-wall suggestions that
 /// extend the curated catalog with permission to do the slightly-odd
@@ -1285,6 +1286,7 @@ const List<Suggestion> weirdTail = [
     tags: ['culture', 'eccentric'],
     interests: [Interests.culture, Interests.exploration, Interests.learning],
     weirdness: 0.7,
+    goOutCategory: PlaceCategory.museum,
   ),
   Suggestion(
     id: 'wt-three-locals',
@@ -1348,6 +1350,7 @@ const List<Suggestion> weirdTail = [
     tags: ['nature', 'walking'],
     interests: [Interests.nature, Interests.exploration, Interests.walking],
     weirdness: 0.6,
+    goOutCategory: PlaceCategory.park,
   ),
   Suggestion(
     id: 'wt-weirdest-restaurant',
@@ -1363,6 +1366,7 @@ const List<Suggestion> weirdTail = [
     tags: ['food', 'eccentric'],
     interests: [Interests.food, Interests.exploration, Interests.adventure],
     weirdness: 0.7,
+    goOutCategory: PlaceCategory.restaurant,
   ),
 
   // ──────────────────────────────────────────────────────────────
@@ -1443,6 +1447,7 @@ const List<Suggestion> weirdTail = [
     tags: ['connection'],
     interests: [Interests.connection, Interests.social],
     weirdness: 0.6,
+    goOutCategory: PlaceCategory.cafe,
   ),
   Suggestion(
     id: 'wt-dinner-with-elder',
@@ -3249,6 +3254,7 @@ const List<Suggestion> weirdTail = [
     tags: ['food', 'eccentric'],
     interests: [Interests.food, Interests.exploration],
     weirdness: 0.7,
+    goOutCategory: PlaceCategory.cafe,
   ),
   Suggestion(
     id: 'wt-library-wander',
@@ -3265,5 +3271,6 @@ const List<Suggestion> weirdTail = [
     tags: ['reading', 'mindful', 'free'],
     interests: [Interests.reading, Interests.exploration, Interests.mindfulness],
     weirdness: 0.6,
+    goOutCategory: PlaceCategory.library,
   ),
 ];
