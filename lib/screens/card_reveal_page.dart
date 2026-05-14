@@ -714,6 +714,25 @@ class _CardRevealPageState extends State<CardRevealPage>
                       _MetaChip(icon: Icons.tag, label: tag),
                 ],
               ),
+              // Promoted Nearby affordance — sits inside the
+              // chosen-card container so it reads as part of the
+              // recommendation, not a secondary action. Only renders
+              // for cards explicitly tagged as "go out" (those with a
+              // goOutCategory). Tinted with the primary color so it
+              // pops against the surrounding container.
+              if (chosen.goOutCategory != null) ...[
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => _showNearby(chosen),
+                    icon: Icon(chosen.goOutCategory!.icon, size: 18),
+                    label: Text(
+                      'Find a ${chosen.goOutCategory!.label.toLowerCase()} nearby',
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -770,17 +789,11 @@ class _CardRevealPageState extends State<CardRevealPage>
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add your own'),
             ),
-            // Surface Nearby only on cards explicitly authored as
-            // "go out" — they carry a goOutCategory pointing at the
-            // OSM-queryable place type to fetch. Other cards (read at
-            // home, write a memoir, stretch) leave goOutCategory null
-            // and the button stays hidden.
-            if (chosen.goOutCategory != null)
-              TextButton.icon(
-                onPressed: () => _showNearby(chosen),
-                icon: const Icon(Icons.near_me, size: 18),
-                label: const Text('Nearby'),
-              ),
+            // Note: the Nearby button used to live here too, but has
+            // been promoted into the chosen-card container above for
+            // visibility. Cards without a goOutCategory have nothing
+            // to show; cards with one surface a tinted "Find a {cat}
+            // nearby" button right alongside the recommendation.
           ],
         ),
       ],
