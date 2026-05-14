@@ -1,4 +1,5 @@
 import '../models/suggestion.dart';
+import 'place_categories.dart';
 import 'weird_tail.dart';
 
 /// The shipped catalog of activity suggestions.
@@ -3979,5 +3980,266 @@ const List<Suggestion> _curatedSuggestions = [
     weather: WeatherTolerance.drySpellsOnly,
     tags: ['physical', 'nature', 'connection'],
     interests: [Interests.fitness, Interests.nature, Interests.connection],
+  ),
+
+  // ──────────────────────────────────────────────────────────────
+  // GO-OUT EXPANSION — entries that explicitly suggest visiting
+  // somewhere of a specific category. Each carries a goOutCategory
+  // so the card-reveal page surfaces a Nearby button keyed to that
+  // category. Without the field, the Nearby affordance stays hidden
+  // (the default for everything above this section).
+  // ──────────────────────────────────────────────────────────────
+
+  Suggestion(
+    id: 'try-a-new-cafe',
+    title: 'Try a new café',
+    description:
+        'One you walk past but never stop at. Order something you don\'t usually get and just sit there for a while.',
+    iconName: 'local_cafe',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.relaxed, Mood.social, Mood.creative],
+    social: [
+      SocialContext.solo,
+      SocialContext.partner,
+      SocialContext.smallGroup
+    ],
+    energyLevel: 1.5,
+    durationMinutes: 60,
+    tags: ['out', 'low-key'],
+    interests: [Interests.food, Interests.exploration],
+    goOutCategory: PlaceCategory.cafe,
+  ),
+  Suggestion(
+    id: 'visit-the-closest-library',
+    title: 'Visit the closest library',
+    description:
+        'Wander the stacks. Read a magazine you\'d never buy. Borrow something on a whim.',
+    iconName: 'local_library',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.relaxed, Mood.productive, Mood.creative],
+    social: [SocialContext.solo],
+    energyLevel: 1.5,
+    durationMinutes: 60,
+    tags: ['out', 'free', 'screen-free'],
+    interests: [Interests.reading, Interests.learning],
+    goOutCategory: PlaceCategory.library,
+  ),
+  Suggestion(
+    id: 'browse-a-new-bookstore',
+    title: 'Browse a bookstore you haven\'t been to',
+    description:
+        'No agenda. Pick three books off the shelf, read the first page of each. Buy one if it grabs you.',
+    iconName: 'menu_book',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.relaxed, Mood.creative],
+    social: [SocialContext.solo, SocialContext.partner],
+    energyLevel: 2.0,
+    durationMinutes: 60,
+    tags: ['out', 'low-key'],
+    interests: [Interests.reading, Interests.exploration],
+    goOutCategory: PlaceCategory.bookstore,
+  ),
+  Suggestion(
+    id: 'find-a-park-you-havent-visited',
+    title: 'Find a park you haven\'t visited',
+    description:
+        'Use the map. Pick the closest one you\'ve never set foot in. Walk a loop. See what\'s there.',
+    iconName: 'park',
+    activityType: ActivityType.outdoor,
+    moods: [Mood.relaxed, Mood.social],
+    social: [
+      SocialContext.solo,
+      SocialContext.partner,
+      SocialContext.smallGroup
+    ],
+    energyLevel: 2.5,
+    durationMinutes: 60,
+    weather: WeatherTolerance.drySpellsOnly,
+    tags: ['out', 'free', 'nature'],
+    interests: [Interests.nature, Interests.walking, Interests.exploration],
+    goOutCategory: PlaceCategory.park,
+  ),
+  Suggestion(
+    id: 'walk-to-a-viewpoint',
+    title: 'Walk to a viewpoint',
+    description:
+        'Pick the nearest hilltop, lookout, or overlook. Get there on foot. Stay until you\'re ready to head back.',
+    iconName: 'landscape',
+    activityType: ActivityType.outdoor,
+    moods: [Mood.relaxed, Mood.creative],
+    social: [SocialContext.solo, SocialContext.partner],
+    energyLevel: 3.5,
+    durationMinutes: 90,
+    weather: WeatherTolerance.drySpellsOnly,
+    tags: ['out', 'physical', 'nature'],
+    interests: [Interests.nature, Interests.walking, Interests.photography],
+    goOutCategory: PlaceCategory.viewpoint,
+  ),
+  Suggestion(
+    id: 'catch-a-movie-at-the-cinema',
+    title: 'Catch whatever\'s playing at the cinema',
+    description:
+        'Pick the next showing. Don\'t Google it. Get popcorn. Old-school surprise.',
+    iconName: 'movie',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.relaxed, Mood.social],
+    social: [SocialContext.solo, SocialContext.partner],
+    energyLevel: 1.5,
+    durationMinutes: 150,
+    tags: ['out', 'screen'],
+    interests: [Interests.culture, Interests.exploration],
+    goOutCategory: PlaceCategory.cinema,
+  ),
+  Suggestion(
+    id: 'wander-a-museum',
+    title: 'Wander a museum',
+    description:
+        'No checklist. Walk until something catches your eye, then linger.',
+    iconName: 'museum',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.relaxed, Mood.creative, Mood.productive],
+    social: [
+      SocialContext.solo,
+      SocialContext.partner,
+      SocialContext.smallGroup
+    ],
+    energyLevel: 2.5,
+    durationMinutes: 120,
+    tags: ['out', 'culture'],
+    interests: [
+      Interests.culture,
+      Interests.learning,
+      Interests.exploration,
+    ],
+    goOutCategory: PlaceCategory.museum,
+  ),
+  Suggestion(
+    id: 'wander-a-gallery',
+    title: 'Wander an art gallery',
+    description:
+        'A small one is fine. Maybe you\'ll find something you actually like.',
+    iconName: 'brush',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.relaxed, Mood.creative],
+    social: [SocialContext.solo, SocialContext.partner],
+    energyLevel: 2.0,
+    durationMinutes: 60,
+    tags: ['out', 'culture'],
+    interests: [Interests.art, Interests.culture, Interests.creativity],
+    goOutCategory: PlaceCategory.gallery,
+  ),
+  Suggestion(
+    id: 'hit-the-gym',
+    title: 'Hit the gym for thirty minutes',
+    description:
+        'Whatever feels good. Lift, run, stretch. Quick session beats no session.',
+    iconName: 'fitness_center',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.productive],
+    social: [SocialContext.solo],
+    energyLevel: 4.0,
+    durationMinutes: 30,
+    tags: ['out', 'physical', 'wellness'],
+    interests: [Interests.fitness, Interests.wellness],
+    goOutCategory: PlaceCategory.gym,
+  ),
+  Suggestion(
+    id: 'try-a-new-restaurant-for-dinner',
+    title: 'Try a new restaurant for dinner',
+    description:
+        'Skip the usuals. Walk in somewhere you\'ve never been and order whatever the staff recommends.',
+    iconName: 'restaurant',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.social, Mood.relaxed],
+    social: [
+      SocialContext.partner,
+      SocialContext.smallGroup,
+      SocialContext.solo,
+    ],
+    energyLevel: 2.0,
+    durationMinutes: 90,
+    tags: ['out', 'food'],
+    interests: [Interests.food, Interests.exploration, Interests.social],
+    goOutCategory: PlaceCategory.restaurant,
+  ),
+  Suggestion(
+    id: 'catch-something-at-a-theatre',
+    title: 'Catch something at a small theatre',
+    description:
+        'Plays, comedy, improv — whatever\'s on tonight. Live performance always lands harder than streaming.',
+    iconName: 'theater_comedy',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.relaxed, Mood.social, Mood.creative],
+    social: [SocialContext.partner, SocialContext.smallGroup],
+    energyLevel: 1.5,
+    durationMinutes: 150,
+    tags: ['out', 'culture'],
+    interests: [Interests.culture, Interests.art],
+    goOutCategory: PlaceCategory.theatre,
+  ),
+  Suggestion(
+    id: 'find-a-pub-with-character',
+    title: 'Find a pub with character',
+    description:
+        'Not a chain. The kind with regulars and a single beer on tap that\'s been there forever.',
+    iconName: 'sports_bar',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.social, Mood.relaxed],
+    social: [SocialContext.partner, SocialContext.smallGroup],
+    energyLevel: 2.0,
+    durationMinutes: 90,
+    tags: ['out', 'social'],
+    interests: [Interests.social, Interests.connection],
+    goOutCategory: PlaceCategory.pub,
+  ),
+  Suggestion(
+    id: 'lap-swim-at-a-pool',
+    title: 'Swim laps at a pool',
+    description:
+        'Forty minutes of meditative back-and-forth. Surprisingly satisfying.',
+    iconName: 'pool',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.productive, Mood.relaxed],
+    social: [SocialContext.solo],
+    energyLevel: 3.5,
+    durationMinutes: 60,
+    tags: ['out', 'physical', 'wellness'],
+    interests: [Interests.fitness, Interests.wellness, Interests.sports],
+    goOutCategory: PlaceCategory.swimmingPool,
+  ),
+  Suggestion(
+    id: 'picnic-in-a-public-garden',
+    title: 'Picnic in a public garden',
+    description:
+        'Pack something simple. Spread a blanket. Eat slowly while people-watching.',
+    iconName: 'local_florist',
+    activityType: ActivityType.outdoor,
+    moods: [Mood.relaxed, Mood.social],
+    social: [
+      SocialContext.partner,
+      SocialContext.smallGroup,
+      SocialContext.solo
+    ],
+    energyLevel: 1.5,
+    durationMinutes: 90,
+    weather: WeatherTolerance.drySpellsOnly,
+    tags: ['out', 'food', 'nature'],
+    interests: [Interests.food, Interests.nature, Interests.connection],
+    goOutCategory: PlaceCategory.garden,
+  ),
+  Suggestion(
+    id: 'see-live-music',
+    title: 'Catch live music nearby',
+    description:
+        'A small venue, maybe a band you\'ve never heard of. Showing up is the whole point.',
+    iconName: 'music_note',
+    activityType: ActivityType.hybrid,
+    moods: [Mood.social, Mood.creative],
+    social: [SocialContext.partner, SocialContext.smallGroup],
+    energyLevel: 3.0,
+    durationMinutes: 180,
+    tags: ['out', 'culture'],
+    interests: [Interests.music, Interests.culture, Interests.social],
+    goOutCategory: PlaceCategory.musicVenue,
   ),
 ];

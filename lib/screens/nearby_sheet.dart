@@ -2,35 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../data/interest_places_map.dart';
 import '../data/place_categories.dart';
 import '../models/nearby_place.dart';
 import '../models/suggestion.dart';
 import '../services/places_service.dart';
 
-/// Bottom-sheet listing places near the user that match the
-/// interests of the suggestion they just landed on.
+/// Bottom-sheet listing places of a specific [PlaceCategory] near
+/// the user — fired from a "go out" card's Nearby button on the
+/// settled state.
 ///
-/// Designed in *sections* — currently one section per
-/// [PlaceCategory], but the structure leaves room for future
-/// "Featured" or curated recommendation sections that don't come
-/// from OSM. Each section header carries an icon, label, and count;
-/// each tile shows name + optional address + distance + a tap to
-/// open in Maps.
+/// The single category comes from [Suggestion.goOutCategory], so a
+/// "Try a new café" card surfaces cafés, "Find a park you haven't
+/// visited" surfaces parks, etc. No interest-resolution surprises:
+/// the card declares the intent, the sheet honors it.
 ///
-/// Opens via [showNearbySheet]. Don't construct directly.
+/// Open via [showNearbySheet]. Don't construct directly.
 class _NearbySheet extends StatefulWidget {
   final Suggestion suggestion;
-
-  /// User's tagged interests, unioned with the suggestion's
-  /// interests when resolving which place categories to query.
-  /// An empty list still works — the suggestion's own interests
-  /// drive the query alone.
-  final List<String> userInterests;
+  final PlaceCategory category;
 
   const _NearbySheet({
     required this.suggestion,
-    required this.userInterests,
+    required this.category,
   });
 
   @override
@@ -38,31 +31,13 @@ class _NearbySheet extends StatefulWidget {
 }
 
 class _NearbySheetState extends State<_NearbySheet> {
-  late final Future<Map<PlaceCategory, List<NearbyPlace>>> _future;
-
-  /// How many distinct place categories we fetch per open. Top-N
-  /// keeps the sheet skimmable and the Overpass calls bounded.
-  static const _maxCategories = 3;
+  late final Future<List<NearbyPlace>> _future;
 
   @override
   void initState() {
     super.initState();
-    final categories = _resolve();
     final service = Provider.of<PlacesService>(context, listen: false);
-    _future = service.fetchForCategories(categories: categories);
-  }
-
-  /// Resolve which [PlaceCategory] values to query based on (a)
-  /// the chosen suggestion's interests and (b) the user's interests.
-  /// Categories matching the chosen card outrank user-only matches
-  /// via the vote-count in `resolveCategories`.
-  List<PlaceCategory> _resolve() {
-    final all = <String>{
-      ...widget.suggestion.interests,
-      ...widget.userInterests,
-    };
-    final ranked = resolveCategories(all);
-    return ranked.take(_maxCategories).toList();
+    _future = service.fetchNearby(category: widget.category);
   }
 
   @override
@@ -92,18 +67,21 @@ class _NearbySheetState extends State<_NearbySheet> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
                 child: Row(
                   children: [
-                    Icon(Icons.near_me, color: theme.colorScheme.primary),
+                    Icon(
+                      widget.category.icon,
+                      color: theme.colorScheme.primary,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Nearby',
+                            'Nearby ${widget.category.label.toLowerCase()}',
                             style: theme.textTheme.titleLarge,
                           ),
                           Text(
-                            'Based on \u201c${widget.suggestion.title}\u201d',
+                            'For \u201c${widget.suggestion.title}\u201d',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -116,7 +94,7 @@ class _NearbySheetState extends State<_NearbySheet> {
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: FutureBuilder<Map<PlaceCategory, List<NearbyPlace>>>(
+                child: FutureBuilder<List<NearbyPlace>>(
                   future: _future,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
@@ -125,14 +103,21 @@ class _NearbySheetState extends State<_NearbySheet> {
                     if (snapshot.hasError) {
                       return _buildError(theme, snapshot.error.toString());
                     }
-                    final results = snapshot.data ?? const {};
-                    if (results.isEmpty) {
+                    final places = snapshot.data ?? const <NearbyPlace>[];
+                    if (places.isEmpty) {
                       return _buildEmpty(theme);
                     }
-                    return _buildSections(
-                      theme,
-                      results,
-                      scrollController,
+                    return ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      itemCount: places.length,
+                      separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        color: theme.colorScheme.outlineVariant
+                            .withValues(alpha: 0.5),
+                      ),
+                      itemBuilder: (context, i) =>
+                          _buildPlaceTile(theme, places[i]),
                     );
                   },
                 ),
@@ -144,58 +129,12 @@ class _NearbySheetState extends State<_NearbySheet> {
     );
   }
 
-  Widget _buildSections(
-    ThemeData theme,
-    Map<PlaceCategory, List<NearbyPlace>> sections,
-    ScrollController scrollController,
-  ) {
-    final entries = sections.entries.toList();
-    return ListView.builder(
-      controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      itemCount: entries.length,
-      itemBuilder: (context, sectionIndex) {
-        final cat = entries[sectionIndex].key;
-        final places = entries[sectionIndex].value;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    Icon(cat.icon, size: 18, color: theme.colorScheme.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      cat.label,
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${places.length}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ...places.take(5).map((p) => _buildPlaceTile(theme, p)),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildPlaceTile(ThemeData theme, NearbyPlace place) {
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
       onTap: () => _openInMaps(place),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         child: Row(
           children: [
             Icon(
@@ -270,7 +209,8 @@ class _NearbySheetState extends State<_NearbySheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Try a different card, or pick more interests in Settings.',
+              'No ${widget.category.label.toLowerCase()} found within '
+              'two kilometres. Try a wider trip another day.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -322,13 +262,13 @@ class _NearbySheetState extends State<_NearbySheet> {
   }
 }
 
-/// Convenience helper to show the Nearby sheet — pass the chosen
-/// [Suggestion] and the user's tagged interests. Returns the
+/// Convenience helper to show the Nearby sheet for a single
+/// [PlaceCategory] derived from the chosen card. Returns the
 /// future from `showModalBottomSheet`.
 Future<void> showNearbySheet(
   BuildContext context, {
   required Suggestion suggestion,
-  required List<String> userInterests,
+  required PlaceCategory category,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -339,7 +279,7 @@ Future<void> showNearbySheet(
     ),
     builder: (_) => _NearbySheet(
       suggestion: suggestion,
-      userInterests: userInterests,
+      category: category,
     ),
   );
 }

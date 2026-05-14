@@ -13,7 +13,6 @@ import '../models/suggestions_repository.dart';
 import '../models/weather_model.dart';
 import '../services/weather_service.dart';
 import '../utils/constants.dart';
-import '../data/interest_places_map.dart';
 import '../widgets/decision_card.dart';
 import '../widgets/premium_gate.dart';
 import 'interests_picker_page.dart';
@@ -771,12 +770,12 @@ class _CardRevealPageState extends State<CardRevealPage>
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add your own'),
             ),
-            // Only surface "Nearby" when the chosen suggestion's
-            // interests (plus the user's) resolve to at least one
-            // OSM-queryable category. Suggestions like "build a
-            // Lego castle" have no place-side mapping and shouldn't
-            // imply there's something nearby to find.
-            if (_hasNearbyForChosen(chosen))
+            // Surface Nearby only on cards explicitly authored as
+            // "go out" — they carry a goOutCategory pointing at the
+            // OSM-queryable place type to fetch. Other cards (read at
+            // home, write a memoir, stretch) leave goOutCategory null
+            // and the button stays hidden.
+            if (chosen.goOutCategory != null)
               TextButton.icon(
                 onPressed: () => _showNearby(chosen),
                 icon: const Icon(Icons.near_me, size: 18),
@@ -788,18 +787,13 @@ class _CardRevealPageState extends State<CardRevealPage>
     );
   }
 
-  /// True if the chosen card + user's interests resolve to at least
-  /// one [PlaceCategory] worth showing in the Nearby sheet.
-  bool _hasNearbyForChosen(Suggestion chosen) {
-    final prefs = Provider.of<PreferencesModel>(context, listen: false);
-    final all = <String>{...chosen.interests, ...prefs.userInterests};
-    return resolveCategories(all).isNotEmpty;
-  }
-
   /// Premium-gated entry point for the Nearby sheet. Free users see
   /// the placeholder upsell dialog; premium users get the sheet, or
   /// a prompt to enable location if their toggle is off.
   Future<void> _showNearby(Suggestion chosen) async {
+    final category = chosen.goOutCategory;
+    if (category == null) return; // defensive — UI shouldn't allow this
+
     if (!hasPremium()) {
       await showPremiumComingSoonDialog(
         context,
@@ -830,7 +824,7 @@ class _CardRevealPageState extends State<CardRevealPage>
     await showNearbySheet(
       context,
       suggestion: chosen,
-      userInterests: prefs.userInterests,
+      category: category,
     );
   }
 

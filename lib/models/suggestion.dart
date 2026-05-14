@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../data/place_categories.dart';
+
 /// The type of environment an activity takes place in.
 enum ActivityType {
   indoor,
@@ -202,6 +204,18 @@ class Suggestion {
   /// True if user-added at runtime (not part of the shipped catalog).
   final bool isCustom;
 
+  /// If non-null, this is a "go out" card: the suggestion is
+  /// inherently about visiting somewhere of this category, and the
+  /// settled-state UI should expose a Nearby button that fetches
+  /// places of this category around the user.
+  ///
+  /// Most catalog entries leave this null — they're things you can
+  /// do at home or anywhere. A small set of curated entries set it
+  /// explicitly: e.g., "Try a new café" → [PlaceCategory.cafe].
+  /// Adding this field doesn't change scoring or filtering — it's
+  /// purely a UI affordance signal.
+  final PlaceCategory? goOutCategory;
+
   const Suggestion({
     required this.id,
     required this.title,
@@ -218,6 +232,7 @@ class Suggestion {
     this.interests = const [],
     this.weirdness = 0.2,
     this.isCustom = false,
+    this.goOutCategory,
   });
 
   /// Resolve [iconName] to a Material [IconData]. Falls back to a generic
@@ -241,6 +256,7 @@ class Suggestion {
     List<String>? interests,
     double? weirdness,
     bool? isCustom,
+    PlaceCategory? goOutCategory,
   }) {
     return Suggestion(
       id: id ?? this.id,
@@ -258,6 +274,7 @@ class Suggestion {
       interests: interests ?? this.interests,
       weirdness: weirdness ?? this.weirdness,
       isCustom: isCustom ?? this.isCustom,
+      goOutCategory: goOutCategory ?? this.goOutCategory,
     );
   }
 
@@ -277,6 +294,7 @@ class Suggestion {
         'interests': interests,
         'weirdness': weirdness,
         'isCustom': isCustom,
+        if (goOutCategory != null) 'goOutCategory': goOutCategory!.name,
       };
 
   factory Suggestion.fromJson(Map<String, dynamic> json) {
@@ -312,7 +330,23 @@ class Suggestion {
       // so legacy JSON loads without breaking.
       weirdness: (json['weirdness'] as num?)?.toDouble() ?? 0.2,
       isCustom: json['isCustom'] as bool? ?? false,
+      // `goOutCategory` is the Phase-3 redesign addition. Missing or
+      // unknown values fall back to null — non-go-out card.
+      goOutCategory: _parseGoOutCategory(json['goOutCategory']),
     );
+  }
+
+  /// Look up a [PlaceCategory] by enum name from JSON, returning null
+  /// when the field is missing OR the value doesn't match a known
+  /// category. The latter is forward-compatible: if a future build
+  /// removes a category, older persisted JSON degrades gracefully.
+  static PlaceCategory? _parseGoOutCategory(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is! String) return null;
+    for (final c in PlaceCategory.values) {
+      if (c.name == raw) return c;
+    }
+    return null;
   }
 
   @override
