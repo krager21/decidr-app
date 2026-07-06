@@ -5,9 +5,13 @@
 *.swp
 .DS_Store
 .atom/
+.build/
 .buildlog/
+.claude/worktrees/
+.claude/settings.local.json
 .history
 .svn/
+.swiftpm/
 migrate_working_dir/
 
 # IntelliJ related
