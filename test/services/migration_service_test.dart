@@ -161,14 +161,14 @@ void main() {
       // Simulate a kill after step 2 wrote the JSON but before the
       // version bump: value is a String, version still v1.
       final v2Json = jsonEncode([
-        Suggestion(
+        const Suggestion(
           id: 'custom-abc123',
           title: 'Pottery',
           description: '',
           iconName: 'local_activity_outlined',
           activityType: ActivityType.hybrid,
-          moods: const [Mood.relaxed],
-          social: const [SocialContext.solo],
+          moods: [Mood.relaxed],
+          social: [SocialContext.solo],
           energyLevel: 3.0,
           durationMinutes: 30,
           isCustom: true,

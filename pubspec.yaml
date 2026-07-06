@@ -2,7 +2,7 @@ name: decidr_app
 description: Decidr deals you a card so you stop deliberating and start doing.
 publish_to: 'none'
 
-version: 2.0.0+1
+version: 2.1.0+2
 
 environment:
   sdk: '>=3.10.0 <4.0.0'

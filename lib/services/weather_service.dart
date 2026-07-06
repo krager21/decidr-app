@@ -11,7 +11,14 @@ import '../models/weather_model.dart';
 class WeatherService extends ChangeNotifier {
   final http.Client _client;
 
-  WeatherService({http.Client? client}) : _client = client ?? http.Client();
+  /// The key used for requests — the build-time key in production,
+  /// overridable in tests so the fetch/parse/cache paths are reachable
+  /// without a --dart-define at test time.
+  final String _requestApiKey;
+
+  WeatherService({http.Client? client, @visibleForTesting String? apiKey})
+      : _client = client ?? http.Client(),
+        _requestApiKey = apiKey ?? _apiKey;
 
   WeatherData? _currentWeather;
   bool _isLoading = false;
@@ -72,7 +79,7 @@ class WeatherService extends ChangeNotifier {
     // Check the API key before anything else — in particular before
     // touching the GPS. An unconfigured build must never trigger a
     // location-permission prompt.
-    if (!isConfigured) {
+    if (_requestApiKey.isEmpty) {
       debugPrint(
         'Weather API key not configured. '
         'Pass --dart-define=OPENWEATHER_API_KEY=... at build time.',
@@ -102,7 +109,7 @@ class WeatherService extends ChangeNotifier {
 
       // Fetch from OpenWeatherMap API
       final url = Uri.parse(
-        'https://api.openweathermap.org/data/2.5/weather?lat=$lat&lon=$lon&appid=$_apiKey&units=metric',
+        'https://api.openweathermap.org/data/2.5/weather?lat=$lat&lon=$lon&appid=$_requestApiKey&units=metric',
       );
 
       final response = await _client.get(url);
@@ -131,8 +138,8 @@ class WeatherService extends ChangeNotifier {
   }
 
   /// Strip the API key out of exception text before it reaches logs.
-  static String _sanitize(Object e) =>
-      e.toString().replaceAll(_apiKey, '<redacted>');
+  String _sanitize(Object e) =>
+      e.toString().replaceAll(_requestApiKey, '<redacted>');
 
   /// Get current device position using Geolocator
   ///
