@@ -1,6 +1,23 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/context_service.dart';
+import 'preference_profile.dart';
+
+/// Outcome of an attempt to save a preference profile.
+enum SaveProfileResult {
+  saved,
+
+  /// Empty name.
+  invalid,
+
+  /// A profile with this name (case-insensitive) already exists.
+  duplicate,
+
+  /// The caller-supplied cap is full — upsell or explain.
+  capReached,
+}
 
 /// Strongly-typed identifiers for user preferences.
 ///
@@ -144,6 +161,11 @@ class PreferencesModel extends ChangeNotifier {
   /// reach the picker via Settings → Personalization.
   bool interestsPromptDismissed = false;
 
+  /// Saved questionnaire snapshots the user can re-apply in one tap.
+  /// Persisted as JSON under `savedProfiles`. Caps are enforced by
+  /// callers via [saveCurrentAsProfile]'s `maxCount` (free vs Premium).
+  List<PreferenceProfile> savedProfiles = [];
+
   /// List of suggestion **ids** marked as favorites by the user.
   ///
   /// Post-Phase-3, values are stable [Suggestion] ids (catalog slugs
@@ -214,7 +236,101 @@ class PreferencesModel extends ChangeNotifier {
     interestsPromptDismissed =
         _prefs.getBool('interestsPromptDismissed') ?? false;
     favoriteActivities = _prefs.getStringList('favoriteActivities') ?? [];
+    savedProfiles = _decodeProfiles(_prefs.getString('savedProfiles'));
     notifyListeners();
+  }
+
+  /// Decode the persisted profile list, tolerating any malformed
+  /// payload (partial write, downgrade) by resetting to empty rather
+  /// than failing preference loading as a whole.
+  static List<PreferenceProfile> _decodeProfiles(String? raw) {
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return [];
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(PreferenceProfile.fromJson)
+          .toList();
+    } catch (e) {
+      debugPrint('savedProfiles JSON malformed: $e — resetting');
+      return [];
+    }
+  }
+
+  Future<void> _saveProfiles() async {
+    await _prefs.setString(
+      'savedProfiles',
+      jsonEncode(savedProfiles.map((p) => p.toJson()).toList()),
+    );
+  }
+
+  /// Snapshot the current questionnaire answers as a named profile.
+  ///
+  /// [maxCount] is the entitlement-dependent cap the caller resolves
+  /// (free vs Premium). Names are deduplicated case-insensitively.
+  Future<SaveProfileResult> saveCurrentAsProfile(
+    String name, {
+    required int maxCount,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return SaveProfileResult.invalid;
+    final lower = trimmed.toLowerCase();
+    if (savedProfiles.any((p) => p.name.toLowerCase() == lower)) {
+      return SaveProfileResult.duplicate;
+    }
+    if (savedProfiles.length >= maxCount) {
+      return SaveProfileResult.capReached;
+    }
+    // Timestamp ids can collide when two saves land in the same
+    // millisecond (delete would then remove both) — suffix to keep
+    // them unique.
+    final base = 'profile-${DateTime.now().millisecondsSinceEpoch}';
+    var id = base;
+    var suffix = 2;
+    while (savedProfiles.any((p) => p.id == id)) {
+      id = '$base-${suffix++}';
+    }
+    savedProfiles.add(PreferenceProfile(
+      id: id,
+      name: trimmed,
+      activityPreference: activityPreference,
+      mood: mood,
+      energyLevel: energyLevel,
+      weirdnessTolerance: weirdnessTolerance,
+      autoDetectTime: autoDetectTime,
+      timeOfDay: timeOfDay,
+      socialContext: socialContext,
+      duration: duration,
+    ));
+    notifyListeners();
+    await _saveProfiles();
+    return SaveProfileResult.saved;
+  }
+
+  /// Apply a saved profile's answers as the current preferences.
+  /// Mood is applied in-memory only (it is never persisted — see
+  /// [loadPreferences]); everything else round-trips to storage.
+  Future<void> applyProfile(PreferenceProfile profile) async {
+    activityPreference = profile.activityPreference;
+    mood = profile.mood;
+    energyLevel = profile.energyLevel.clamp(1.0, 5.0);
+    weirdnessTolerance = profile.weirdnessTolerance.clamp(0.0, 1.0);
+    autoDetectTime = profile.autoDetectTime;
+    timeOfDay = profile.timeOfDay;
+    socialContext = profile.socialContext;
+    duration = profile.duration;
+    notifyListeners();
+    await savePreferences();
+  }
+
+  /// Delete a saved profile by id. No-op for unknown ids.
+  Future<void> deleteProfile(String id) async {
+    final before = savedProfiles.length;
+    savedProfiles.removeWhere((p) => p.id == id);
+    if (savedProfiles.length == before) return;
+    notifyListeners();
+    await _saveProfiles();
   }
   
   /// Save all current preferences to SharedPreferences.

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/preference_profile.dart';
 import '../models/preferences_model.dart';
 import '../widgets/question_card.dart';
+import '../widgets/save_profile_dialog.dart';
 import 'main_tabs_page.dart';
 
 /// Enhanced questionnaire page with multiple questions
@@ -80,6 +82,11 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
 
     return Column(
       children: [
+        // Quick start: saved profiles apply in one tap and go straight
+        // to the deal — the whole point of saving them.
+        if (preferencesModel.savedProfiles.isNotEmpty)
+          _buildQuickStartRow(theme, preferencesModel),
+
         // Progress bar
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -111,6 +118,15 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
           ),
         ),
         
+        // On the last page with complete answers, offer to snapshot
+        // them as a reusable profile.
+        if (_isLastPage && preferencesModel.arePreferencesComplete)
+          TextButton.icon(
+            onPressed: () => showSaveProfileDialog(context),
+            icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+            label: const Text('Save these answers as a profile'),
+          ),
+
         // Navigation buttons
         Padding(
           padding: const EdgeInsets.all(24),
@@ -167,6 +183,54 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
     );
   }
   
+  /// Horizontal chip row applying a saved profile and jumping straight
+  /// to the deal.
+  Widget _buildQuickStartRow(ThemeData theme, PreferencesModel model) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Quick start',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 40,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: model.savedProfiles.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
+                final profile = model.savedProfiles[i];
+                return ActionChip(
+                  avatar: const Icon(Icons.bolt, size: 16),
+                  label: Text(profile.name),
+                  tooltip: profile.summary,
+                  onPressed: () => _applyProfileAndDeal(profile),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _applyProfileAndDeal(PreferenceProfile profile) async {
+    final model = Provider.of<PreferencesModel>(context, listen: false);
+    await model.applyProfile(profile);
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const MainTabsPage()),
+      (route) => false,
+    );
+  }
+
   // Build pages conditionally based on auto-detect time setting
   List<Widget> _buildPages(ThemeData theme, PreferencesModel preferencesModel) {
     final pages = <Widget>[

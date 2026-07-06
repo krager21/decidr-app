@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../models/preferences_model.dart';
 import '../models/suggestions_repository.dart';
 import '../models/activity_history_model.dart';
+import '../models/preference_profile.dart';
 import '../services/premium_service.dart';
 import '../widgets/paywall_sheet.dart';
+import '../widgets/save_profile_dialog.dart';
 import 'questionnaire_page.dart';
 import 'settings_page.dart';
 import '../utils/constants.dart';
@@ -36,9 +38,19 @@ class ProfilePage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _buildPreferencesCard(context),
-          
+
           const SizedBox(height: 24),
-          
+
+          // Saved preference profiles
+          Text(
+            'Saved Profiles',
+            style: theme.textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          _buildProfilesCard(context),
+
+          const SizedBox(height: 24),
+
           // Favorites section
           Text(
             'Your Favorites',
@@ -317,6 +329,81 @@ class ProfilePage extends StatelessWidget {
     );
   }
   
+  /// Saved questionnaire profiles: apply with a tap, delete with the
+  /// trash icon, save the current answers from the top tile.
+  Widget _buildProfilesCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final preferencesModel = Provider.of<PreferencesModel>(context);
+    final profiles = preferencesModel.savedProfiles;
+
+    return Card(
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(
+              Icons.bookmark_add_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            title: const Text('Save current answers as profile'),
+            onTap: () => showSaveProfileDialog(context),
+          ),
+          if (profiles.isEmpty) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'No profiles yet. Save one to reapply a whole set of '
+                'answers — like "Solo weeknight" or "Date night" — in '
+                'one tap.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ] else ...[
+            const Divider(height: 1),
+            for (int i = 0; i < profiles.length; i++) ...[
+              if (i > 0) const Divider(height: 1),
+              ListTile(
+                leading: Icon(
+                  Icons.bolt,
+                  color: theme.colorScheme.primary,
+                ),
+                title: Text(profiles[i].name),
+                subtitle: Text(profiles[i].summary),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Delete profile',
+                  onPressed: () =>
+                      preferencesModel.deleteProfile(profiles[i].id),
+                ),
+                onTap: () => _applyProfile(context, profiles[i]),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _applyProfile(
+    BuildContext context,
+    PreferenceProfile profile,
+  ) async {
+    final preferencesModel =
+        Provider.of<PreferencesModel>(context, listen: false);
+    await preferencesModel.applyProfile(profile);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Applied "${profile.name}" — deal away!'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   // Build custom suggestions card
   Widget _buildCustomSuggestionsCard(BuildContext context) {
     final theme = Theme.of(context);
