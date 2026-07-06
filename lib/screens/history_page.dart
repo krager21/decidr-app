@@ -5,7 +5,12 @@ import '../models/suggestions_repository.dart';
 
 /// History page showing completed activities
 class HistoryPage extends StatelessWidget {
-  const HistoryPage({super.key});
+  /// Switches the surrounding [MainTabsPage] to the Decide tab.
+  /// HistoryPage is a tab body, not a pushed route, so the empty-state
+  /// CTA can't reach the deal screen through the Navigator.
+  final VoidCallback? onGoDecide;
+
+  const HistoryPage({super.key, this.onGoDecide});
 
   @override
   Widget build(BuildContext context) {
@@ -118,13 +123,12 @@ class HistoryPage extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.popUntil(context, (route) => route.isFirst);
-              },
-              icon: const Icon(Icons.style),
-              label: const Text('Deal cards'),
-            ),
+            if (onGoDecide != null)
+              ElevatedButton.icon(
+                onPressed: onGoDecide,
+                icon: const Icon(Icons.style),
+                label: const Text('Deal cards'),
+              ),
           ],
         ),
       ),

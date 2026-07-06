@@ -1310,7 +1310,9 @@ const List<Suggestion> weirdTail = [
     description:
         'In a bookstore. Pick someone who\'s browsing. Ask: "What should I read?" Trust them.',
     iconName: 'menu_book',
-    activityType: ActivityType.outdoor,
+    // Hybrid, not outdoor: the destination is an indoor venue, and
+    // outdoor + indoorOnly would let the weather filter starve it.
+    activityType: ActivityType.hybrid,
     moods: [Mood.social],
     social: [SocialContext.solo],
     energyLevel: 1.5,
@@ -1319,6 +1321,7 @@ const List<Suggestion> weirdTail = [
     tags: ['reading', 'connection', 'eccentric'],
     interests: [Interests.reading, Interests.connection],
     weirdness: 0.9,
+    goOutCategory: PlaceCategory.bookstore,
   ),
   Suggestion(
     id: 'wt-tour-passed-building',
@@ -3262,7 +3265,9 @@ const List<Suggestion> weirdTail = [
     description:
         'Sixty minutes. No phone. No agenda. Pull books off shelves. Read first lines.',
     iconName: 'menu_book',
-    activityType: ActivityType.outdoor,
+    // Hybrid, not outdoor: the destination is an indoor venue, and
+    // outdoor + indoorOnly would let the weather filter starve it.
+    activityType: ActivityType.hybrid,
     moods: [Mood.relaxed, Mood.creative],
     social: [SocialContext.solo],
     energyLevel: 1.5,

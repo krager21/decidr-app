@@ -13,6 +13,7 @@ class FakeGateway implements PurchasesGateway {
   PurchaseOutcome purchaseOutcome;
   bool throwOnConfigure = false;
   bool throwOnFetch = false;
+  bool throwOnRestore = false;
 
   FakeGateway({
     this.premium = false,
@@ -54,7 +55,13 @@ class FakeGateway implements PurchasesGateway {
   }
 
   @override
-  Future<bool> restore() async => premium;
+  Future<bool> restore() async {
+    if (throwOnRestore) {
+      lastErrorMessage = 'store unreachable';
+      throw Exception('store unreachable');
+    }
+    return premium;
+  }
 
   @override
   Future<String?> fetchManagementUrl() async =>
@@ -80,7 +87,7 @@ void main() {
       expect(gateway.configured, isFalse, reason: 'init must be a no-op');
       expect(await service.loadPackages(), isEmpty);
       expect(await service.purchase(monthly), PurchaseOutcome.failed);
-      expect(await service.restore(), isFalse);
+      expect(await service.restore(), RestoreOutcome.failed);
       expect(await service.managementUrl(), isNull);
     });
   });
@@ -155,13 +162,26 @@ void main() {
       expect(service.isPremium, isFalse);
     });
 
-    test('restore reports and applies the restored state', () async {
+    test('restore distinguishes restored / no purchases / store error',
+        () async {
       final gateway = FakeGateway(premium: true);
       final service =
           PremiumService(gateway: gateway, storeAvailable: true);
-
-      expect(await service.restore(), isTrue);
+      expect(await service.restore(), RestoreOutcome.restored);
       expect(service.isPremium, isTrue);
+
+      final gateway2 = FakeGateway(premium: false);
+      final service2 =
+          PremiumService(gateway: gateway2, storeAvailable: true);
+      expect(await service2.restore(), RestoreOutcome.noPurchases);
+      expect(service2.isPremium, isFalse);
+
+      final gateway3 = FakeGateway()..throwOnRestore = true;
+      final service3 =
+          PremiumService(gateway: gateway3, storeAvailable: true);
+      expect(await service3.restore(), RestoreOutcome.failed,
+          reason: 'a store outage must not read as "no purchases"');
+      expect(service3.lastErrorMessage, isNotNull);
     });
 
     test('loadPackages returns store packages and [] on error', () async {
@@ -173,6 +193,22 @@ void main() {
 
       gateway.throwOnFetch = true;
       expect(await service.loadPackages(), isEmpty);
+    });
+
+    test('a failed configure is retried by the next store call', () async {
+      final gateway = FakeGateway(packages: [monthly])
+        ..throwOnConfigure = true;
+      final service =
+          PremiumService(gateway: gateway, storeAvailable: true);
+
+      await service.init();
+      expect(await service.loadPackages(), isEmpty,
+          reason: 'store still down');
+
+      gateway.throwOnConfigure = false; // store recovers
+      expect(await service.loadPackages(), hasLength(1),
+          reason: 'loadPackages must lazily retry init');
+      expect(gateway.configured, isTrue);
     });
   });
 }

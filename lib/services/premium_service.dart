@@ -66,7 +66,12 @@ class PremiumService extends ChangeNotifier {
   final bool _storeAvailable;
 
   bool _storePremium = false;
-  bool _initialized = false;
+
+  /// Set only once [PurchasesGateway.configure] has succeeded — a
+  /// failed configure must stay retryable, or the paywall's "Try
+  /// again" can never recover.
+  bool _configured = false;
+  Future<void>? _initFuture;
 
   PremiumService({
     PurchasesGateway? gateway,
@@ -86,16 +91,25 @@ class PremiumService extends ChangeNotifier {
 
   /// Configure the store SDK and load the current entitlement state.
   /// Safe to call at every app launch; a no-op without a store key.
-  /// Never throws — store outages leave the user on the free tier.
-  Future<void> init() async {
-    if (!_storeAvailable || _initialized) return;
-    _initialized = true;
+  /// Never throws — store outages leave the user on the free tier,
+  /// and a failed configure is retried by the next store operation.
+  Future<void> init() {
+    if (!_storeAvailable || _configured) return Future.value();
+    return _initFuture ??= _doInit();
+  }
+
+  Future<void> _doInit() async {
     try {
       await _gateway.configure(platformApiKey);
+      _configured = true;
       _gateway.listenForChanges(_onEntitlementChanged);
       _onEntitlementChanged(await _gateway.fetchIsPremium());
     } catch (e) {
       debugPrint('PremiumService init failed: $e');
+    } finally {
+      // Clear the memo so a failed configure can be retried lazily
+      // (loadPackages/purchase/restore all re-enter through init()).
+      _initFuture = null;
     }
   }
 
@@ -103,6 +117,8 @@ class PremiumService extends ChangeNotifier {
   /// store isn't configured.
   Future<List<PremiumPackage>> loadPackages() async {
     if (!_storeAvailable) return const [];
+    await init();
+    if (!_configured) return const [];
     try {
       return await _gateway.fetchPackages();
     } catch (e) {
@@ -115,6 +131,8 @@ class PremiumService extends ChangeNotifier {
   /// and listeners are notified.
   Future<PurchaseOutcome> purchase(PremiumPackage package) async {
     if (!_storeAvailable) return PurchaseOutcome.failed;
+    await init();
+    if (!_configured) return PurchaseOutcome.failed;
     try {
       final outcome = await _gateway.purchase(package);
       if (outcome == PurchaseOutcome.success) {
@@ -127,16 +145,19 @@ class PremiumService extends ChangeNotifier {
     }
   }
 
-  /// Restore purchases made on another device or install. Returns the
-  /// resulting premium state.
-  Future<bool> restore() async {
-    if (!_storeAvailable) return isPremium;
+  /// Restore purchases made on another device or install.
+  Future<RestoreOutcome> restore() async {
+    if (!_storeAvailable) return RestoreOutcome.failed;
+    await init();
+    if (!_configured) return RestoreOutcome.failed;
     try {
-      _onEntitlementChanged(await _gateway.restore());
+      final restored = await _gateway.restore();
+      _onEntitlementChanged(restored);
+      return restored ? RestoreOutcome.restored : RestoreOutcome.noPurchases;
     } catch (e) {
       debugPrint('PremiumService restore failed: $e');
+      return RestoreOutcome.failed;
     }
-    return isPremium;
   }
 
   /// Store-provided subscription management URL, or null.

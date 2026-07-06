@@ -224,6 +224,22 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
     final model = Provider.of<PreferencesModel>(context, listen: false);
     await model.applyProfile(profile);
     if (!mounted) return;
+    // A profile saved without a mood (or manual time) can't deal yet —
+    // stay here with the answers filled in so the user completes the
+    // rest, instead of landing them on a dead Decide tab.
+    if (!model.arePreferencesComplete) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Applied "${profile.name}" — answer the remaining '
+            'questions to deal.',
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const MainTabsPage()),

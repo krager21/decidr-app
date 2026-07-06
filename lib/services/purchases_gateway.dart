@@ -46,6 +46,20 @@ enum PurchaseOutcome {
   failed,
 }
 
+/// Result of a restore attempt. Distinguishes "the store answered and
+/// found nothing" from "the store couldn't be reached" — conflating
+/// them tells a paying user their purchase is gone.
+enum RestoreOutcome {
+  /// Entitlement restored and active.
+  restored,
+
+  /// Store reachable, but no prior purchase on this account.
+  noPurchases,
+
+  /// Store unreachable or errored; try again later.
+  failed,
+}
+
 /// Thin seam over the static RevenueCat API so [PremiumService] can be
 /// unit-tested with a fake. Only this file imports purchases_flutter.
 abstract class PurchasesGateway {
@@ -135,8 +149,14 @@ class RevenueCatGateway implements PurchasesGateway {
 
   @override
   Future<bool> restore() async {
-    final info = await Purchases.restorePurchases();
-    return _hasEntitlement(info);
+    try {
+      final info = await Purchases.restorePurchases();
+      return _hasEntitlement(info);
+    } on PlatformException catch (e) {
+      lastErrorMessage =
+          e.message ?? 'Couldn’t reach the store. Please try again.';
+      rethrow;
+    }
   }
 
   @override

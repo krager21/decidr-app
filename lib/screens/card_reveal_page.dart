@@ -243,14 +243,31 @@ class _CardRevealPageState extends State<CardRevealPage>
     return pool;
   }
 
+  /// Guards the whole [_deal] coroutine, including the 450 ms
+  /// redeal-reset window where [_stage] is briefly `idle` — checking
+  /// stage alone let a quick second tap start a concurrent deal that
+  /// corrupted the slots, exclusions, and running animations.
+  bool _dealInFlight = false;
+
   /// Kick off a fresh deal — cards flip back if applicable, deal in
   /// from above, then flip up sequentially with new candidates.
   Future<void> _deal() async {
-    // Block re-entry while a deal is in flight (considering OR dealing).
-    if (_stage == _RevealStage.considering ||
+    // _runDeal returns once the flip timers are scheduled, so also
+    // block on stage for the timer-driven tail of the sequence.
+    if (_dealInFlight ||
+        _stage == _RevealStage.considering ||
         _stage == _RevealStage.dealing) {
       return;
     }
+    _dealInFlight = true;
+    try {
+      await _runDeal();
+    } finally {
+      _dealInFlight = false;
+    }
+  }
+
+  Future<void> _runDeal() async {
     _cancelAllTimers();
 
     final pool = _buildPool();
@@ -1319,7 +1336,23 @@ class _ThinkingChainState extends State<_ThinkingChain>
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
-    )..repeat();
+    );
+    // Only tick while pulsing — the chain stays mounted through the
+    // settled state, and an unconditional repeat() would rebuild this
+    // subtree every frame for as long as the result screen idles.
+    if (widget.pulsing) {
+      _pulseController.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_ThinkingChain oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.pulsing && !_pulseController.isAnimating) {
+      _pulseController.repeat();
+    } else if (!widget.pulsing && _pulseController.isAnimating) {
+      _pulseController.stop();
+    }
   }
 
   @override

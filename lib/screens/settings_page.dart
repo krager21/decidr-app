@@ -5,6 +5,7 @@ import '../data/deck_themes.dart';
 import '../models/preferences_model.dart';
 import '../services/context_service.dart';
 import '../services/premium_service.dart';
+import '../services/purchases_gateway.dart';
 import '../services/weather_service.dart';
 import '../utils/constants.dart';
 import '../widgets/paywall_sheet.dart';
@@ -329,15 +330,16 @@ class SettingsPage extends StatelessWidget {
     BuildContext context,
     PremiumService premium,
   ) async {
-    final restored = await premium.restore();
+    final outcome = await premium.restore();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          restored
-              ? 'Premium restored — welcome back!'
-              : 'No previous purchases found.',
-        ),
+        content: Text(switch (outcome) {
+          RestoreOutcome.restored => 'Premium restored — welcome back!',
+          RestoreOutcome.noPurchases => 'No previous purchases found.',
+          RestoreOutcome.failed => premium.lastErrorMessage ??
+              'Couldn’t reach the store — please try again.',
+        }),
         behavior: SnackBarBehavior.floating,
       ),
     );

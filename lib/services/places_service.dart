@@ -88,6 +88,10 @@ class PlacesService extends ChangeNotifier {
     final cached = _cache[key];
     if (cached != null &&
         DateTime.now().difference(cached.fetchedAt) < cacheDuration) {
+      // A cached answer is a successful answer — clear any error left
+      // over from an earlier failure, or a cached *empty* result would
+      // render as an error state in the Nearby sheet.
+      _error = null;
       return cached.places;
     }
 

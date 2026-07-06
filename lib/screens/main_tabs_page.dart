@@ -17,9 +17,11 @@ class MainTabsPage extends StatefulWidget {
 class _MainTabsPageState extends State<MainTabsPage> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = [
+  late final List<Widget> _pages = [
     const CardRevealPage(),
-    const HistoryPage(),
+    HistoryPage(
+      onGoDecide: () => setState(() => _currentIndex = 0),
+    ),
     const ProfilePage(),
   ];
 

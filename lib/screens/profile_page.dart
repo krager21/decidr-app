@@ -403,7 +403,12 @@ class ProfilePage extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Applied "${profile.name}" — deal away!'),
+        content: Text(
+          preferencesModel.arePreferencesComplete
+              ? 'Applied "${profile.name}" — deal away!'
+              : 'Applied "${profile.name}" — pick your mood in the '
+                  'questionnaire to deal.',
+        ),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
       ),

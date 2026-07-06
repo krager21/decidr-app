@@ -35,6 +35,10 @@ class _PaywallSheetState extends State<_PaywallSheet> {
   PremiumPackage? _selected;
   bool _busy = false;
 
+  /// Purchase/restore feedback rendered inline in the sheet — a
+  /// ScaffoldMessenger snackbar would appear *behind* this modal.
+  String? _notice;
+
   @override
   void initState() {
     super.initState();
@@ -251,6 +255,16 @@ class _PaywallSheetState extends State<_PaywallSheet> {
           child: Column(
             children: [
               for (final p in packages) _buildPackageTile(theme, p),
+              if (_notice != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _notice!,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: _busy ? null : () => _purchase(premium),
@@ -329,42 +343,47 @@ class _PaywallSheetState extends State<_PaywallSheet> {
   Future<void> _purchase(PremiumService premium) async {
     final selected = _selected;
     if (selected == null) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _notice = null;
+    });
     final outcome = await premium.purchase(selected);
     if (!mounted) return;
-    setState(() => _busy = false);
     switch (outcome) {
       case PurchaseOutcome.success:
         Navigator.of(context).pop();
       case PurchaseOutcome.cancelled:
-        break; // User backed out — stay on the sheet, no error.
+        setState(() => _busy = false); // Backed out — no error surface.
       case PurchaseOutcome.failed:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              premium.lastErrorMessage ??
-                  'Purchase failed. Please try again.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        setState(() {
+          _busy = false;
+          _notice = premium.lastErrorMessage ??
+              'Purchase failed. Please try again.';
+        });
     }
   }
 
   Future<void> _restore(PremiumService premium) async {
-    setState(() => _busy = true);
-    final restored = await premium.restore();
+    setState(() {
+      _busy = true;
+      _notice = null;
+    });
+    final outcome = await premium.restore();
     if (!mounted) return;
-    setState(() => _busy = false);
-    if (restored) {
-      Navigator.of(context).pop();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No previous purchases found.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    switch (outcome) {
+      case RestoreOutcome.restored:
+        Navigator.of(context).pop();
+      case RestoreOutcome.noPurchases:
+        setState(() {
+          _busy = false;
+          _notice = 'No previous purchases found.';
+        });
+      case RestoreOutcome.failed:
+        setState(() {
+          _busy = false;
+          _notice = premium.lastErrorMessage ??
+              'Couldn’t reach the store — please try again.';
+        });
     }
   }
 }

@@ -321,14 +321,11 @@ class SuggestionsRepository extends ChangeNotifier {
     double weirdnessTolerance = 0.3,
 
     /// User's stable interests (catalog-tag strings from `Interests.*`).
-    /// Soft-biases the score via a Jaccard overlap multiplier:
-    ///
-    ///   interestAffinity = empty ? 1.0
-    ///                            : 0.5 + 0.5 × jaccard(user, suggestion)
-    ///
-    /// Floor at 0.5 keeps zero-overlap entries surfacable so power-users
-    /// with niche picks aren't starved. Empty list collapses the term to
-    /// 1.0 (no effect).
+    /// Soft-biases the score via [_interestAffinity]: any-overlap
+    /// entries (0.8–1.0) outrank untagged/generic entries (0.75),
+    /// which outrank tagged zero-overlap entries (0.5 floor — still
+    /// surfacable so niche picks aren't starved). An empty user list
+    /// collapses the term to 1.0 (no effect).
     List<String> userInterests = const [],
 
     /// Suggestion ids to filter out — typically the ones already
@@ -398,9 +395,8 @@ class SuggestionsRepository extends ChangeNotifier {
     // Stage 4: score by energy proximity × feedback weight × weirdness
     // affinity × interest affinity.
     // - Weirdness affinity = 1 − |s.weirdness − tolerance|, clamped [0,1].
-    // - Interest affinity  = 1.0 when user picked no interests; otherwise
-    //   0.5 + 0.5 × jaccard(user, s.interests). The 0.5 floor keeps the
-    //   pool surfacable for niche picks.
+    // - Interest affinity is a three-tier scale (see
+    //   [_interestAffinity]): overlap beats generic beats mismatch.
     final scored = <_ScoredSuggestion>[];
     for (final s in pool) {
       final delta = (s.energyLevel - energyLevel).abs();
@@ -408,9 +404,7 @@ class SuggestionsRepository extends ChangeNotifier {
       final fbWeight = feedback?.getActivityWeight(s.id) ?? 1.0;
       final weirdAffinity =
           (1.0 - (s.weirdness - weirdnessTolerance).abs()).clamp(0.0, 1.0);
-      final interestAffinity = userInterestSet.isEmpty
-          ? 1.0
-          : 0.5 + 0.5 * _jaccard(userInterestSet, s.interests);
+      final interestAffinity = _interestAffinity(userInterestSet, s);
       scored.add(_ScoredSuggestion(
         s,
         energyScore * fbWeight * weirdAffinity * interestAffinity,
@@ -507,6 +501,24 @@ class SuggestionsRepository extends ChangeNotifier {
   // ──────────────────────────────────────────────────────────────
   // Helpers
   // ──────────────────────────────────────────────────────────────
+
+  /// Interest-affinity multiplier for stage 4 scoring.
+  ///
+  /// Three tiers, so interests bias without starving anything:
+  ///   1.0            user picked no interests — term collapses
+  ///   0.8 + 0.2 × j  suggestion shares ≥1 interest with the user
+  ///                  (any overlap outranks generic; jaccard refines)
+  ///   0.75           suggestion has no interest tags — *generic* per
+  ///                  the [Suggestion.interests] contract ("matches any
+  ///                  interest filter"), so it must not share the
+  ///                  mismatch floor
+  ///   0.5            tagged but zero overlap — surfacable floor
+  double _interestAffinity(Set<String> user, Suggestion s) {
+    if (user.isEmpty) return 1.0;
+    if (s.interests.isEmpty) return 0.75;
+    final j = _jaccard(user, s.interests);
+    return j > 0 ? 0.8 + 0.2 * j : 0.5;
+  }
 
   /// Jaccard similarity between [user] (a set of interest strings) and
   /// [suggestion]'s tagged interests. Returns 0.0 when [suggestion] has
