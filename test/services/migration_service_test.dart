@@ -155,4 +155,68 @@ void main() {
       expect(prefs.getInt('prefsSchemaVersion'), 2);
     });
   });
+
+  group('MigrationService re-entrancy (retry after partial run)', () {
+    test('does not crash when customSuggestions is already v2 JSON', () async {
+      // Simulate a kill after step 2 wrote the JSON but before the
+      // version bump: value is a String, version still v1.
+      final v2Json = jsonEncode([
+        Suggestion(
+          id: 'custom-abc123',
+          title: 'Pottery',
+          description: '',
+          iconName: 'local_activity_outlined',
+          activityType: ActivityType.hybrid,
+          moods: const [Mood.relaxed],
+          social: const [SocialContext.solo],
+          energyLevel: 3.0,
+          durationMinutes: 30,
+          isCustom: true,
+        ).toJson(),
+      ]);
+      SharedPreferences.setMockInitialValues({
+        'customSuggestions': v2Json,
+        // Favorites still v1: one custom title, one catalog title.
+        'favoriteActivities': [
+          'Pottery',
+          defaultSuggestions.first.title,
+        ],
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await MigrationService.migrateIfNeeded(prefs);
+
+      // Migration completed rather than throwing a TypeError.
+      expect(prefs.getInt('prefsSchemaVersion'), 2);
+      // The custom title resolved to the id from the existing v2 JSON,
+      // not to a freshly synthesized one.
+      final favorites = prefs.getStringList('favoriteActivities')!;
+      expect(favorites.first, 'custom-abc123');
+      expect(favorites.last, defaultSuggestions.first.id);
+      // The JSON payload itself was left alone.
+      expect(prefs.getString('customSuggestions'), v2Json);
+    });
+
+    test('already-migrated ids pass through unchanged on a re-run', () async {
+      final entry = defaultSuggestions.first;
+      // Favorites/history/dislikes already hold v2 ids, but the
+      // version bump never landed (partial run with no v1 customs).
+      SharedPreferences.setMockInitialValues({
+        'favoriteActivities': [entry.id, 'custom-deadbeef'],
+        'activityHistory': jsonEncode({entry.id: '2026-01-01T00:00:00Z'}),
+        'activity_dislikes': [entry.id],
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await MigrationService.migrateIfNeeded(prefs);
+
+      expect(prefs.getStringList('favoriteActivities'),
+          [entry.id, 'custom-deadbeef'],
+          reason: 'ids must not be rewritten to custom-<hash>');
+      final hist = jsonDecode(prefs.getString('activityHistory')!)
+          as Map<String, dynamic>;
+      expect(hist.keys.single, entry.id);
+      expect(prefs.getStringList('activity_dislikes'), [entry.id]);
+    });
+  });
 }

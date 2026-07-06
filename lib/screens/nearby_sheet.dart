@@ -105,6 +105,17 @@ class _NearbySheetState extends State<_NearbySheet> {
                     }
                     final places = snapshot.data ?? const <NearbyPlace>[];
                     if (places.isEmpty) {
+                      // fetchNearby never throws — failures come back
+                      // as an empty list with the reason on the
+                      // service. Distinguish "nothing around" from
+                      // "couldn't look".
+                      final serviceError = Provider.of<PlacesService>(
+                        context,
+                        listen: false,
+                      ).error;
+                      if (serviceError != null) {
+                        return _buildError(theme, serviceError);
+                      }
                       return _buildEmpty(theme);
                     }
                     return ListView.separated(
@@ -256,8 +267,20 @@ class _NearbySheetState extends State<_NearbySheet> {
 
   Future<void> _openInMaps(NearbyPlace place) async {
     final url = Uri.parse(place.mapsUrl);
-    if (await canLaunchUrl(url)) {
+    // No canLaunchUrl guard: on Android 11+ it reports false for
+    // https URLs unless the manifest declares a matching <queries>
+    // intent, silently no-opping the tap. launchUrl itself throws
+    // when nothing can handle the URL, which we surface instead.
+    try {
       await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Couldn’t open the map link.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 }

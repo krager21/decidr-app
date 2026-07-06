@@ -5,7 +5,8 @@ class AnimatedGradientBackground extends StatefulWidget {
   const AnimatedGradientBackground({super.key});
 
   @override
-  _AnimatedGradientBackgroundState createState() => _AnimatedGradientBackgroundState();
+  State<AnimatedGradientBackground> createState() =>
+      _AnimatedGradientBackgroundState();
 }
 
 class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground> with SingleTickerProviderStateMixin {

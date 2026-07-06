@@ -26,10 +26,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Decidr uses your location to provide weather-appropriate activity suggestions.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Decidr uses your location to provide weather-appropriate activity suggestions.</string>
+	<string>Decidr uses your location to show weather-appropriate suggestions and nearby places. It is never used in the background.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

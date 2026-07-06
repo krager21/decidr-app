@@ -37,18 +37,29 @@ class MigrationService {
 
   /// Run any outstanding migrations. Call once at app startup before
   /// any model loads from [SharedPreferences].
+  ///
+  /// Never throws: a failed migration is logged and retried on the
+  /// next launch (the version key is only bumped on success), and the
+  /// v1→v2 step is re-entrant so a retry after a mid-migration kill
+  /// neither crashes on already-converted payloads nor rewrites
+  /// already-migrated ids.
   static Future<void> migrateIfNeeded(SharedPreferences prefs) async {
     final current = prefs.getInt(_versionKey) ?? 1;
     if (current >= _targetVersion) return;
 
     debugPrint('Running prefs migration $current → $_targetVersion');
 
-    if (current < 2) {
-      await _migrateV1ToV2(prefs);
+    try {
+      if (current < 2) {
+        await _migrateV1ToV2(prefs);
+      }
+      await prefs.setInt(_versionKey, _targetVersion);
+      debugPrint('Migration complete; schema is now v$_targetVersion');
+    } catch (e, stack) {
+      // Leave the version untouched so we retry next launch; the app
+      // must still start with whatever state the models can salvage.
+      debugPrint('Migration failed (will retry next launch): $e\n$stack');
     }
-
-    await prefs.setInt(_versionKey, _targetVersion);
-    debugPrint('Migration complete; schema is now v$_targetVersion');
   }
 
   /// v1 → v2: title-keyed → id-keyed.
@@ -56,22 +67,33 @@ class MigrationService {
   /// Order matters: customs are migrated first so the title→id resolver
   /// includes their freshly-assigned ids when favorites/history/feedback
   /// reference them.
+  ///
+  /// Re-entrant by construction: a retry after a partial run (kill or
+  /// error before the version bump) must not crash on payloads that
+  /// are already v2-shaped, and must pass already-migrated **ids**
+  /// through unchanged instead of re-resolving them as unknown titles
+  /// (which would rewrite them to bogus `custom-<hash>` ids).
   static Future<void> _migrateV1ToV2(SharedPreferences prefs) async {
-    // 1. Build a base resolver from the catalog (title → id).
+    // 1. Build a base resolver from the catalog (title → id), plus the
+    //    set of ids that must pass through untouched on a re-run.
     final resolver = <String, String>{};
     for (final s in defaultSuggestions) {
       resolver[s.title.toLowerCase()] = s.id;
     }
+    final knownIds = <String>{...resolver.values};
 
     // 2. Migrate custom suggestions (List<String> titles → JSON list).
-    //    Skip if not present (fresh install or already migrated).
-    final oldCustomTitles = prefs.getStringList('customSuggestions');
-    if (oldCustomTitles != null) {
+    //    prefs.get() lets us type-check instead of crashing on a
+    //    String payload written by a previous partial run.
+    final rawCustoms = prefs.get('customSuggestions');
+    if (rawCustoms is List) {
+      final oldCustomTitles = rawCustoms.whereType<String>().toList();
       final newCustoms = <Suggestion>[];
       final usedIds = <String>{...resolver.values};
       for (final title in oldCustomTitles) {
         final id = _customIdFor(title, usedIds);
         usedIds.add(id);
+        knownIds.add(id);
         newCustoms.add(_synthesizeCustomFromTitle(title, id));
         resolver[title.toLowerCase()] = id;
       }
@@ -83,13 +105,34 @@ class MigrationService {
         jsonEncode(newCustoms.map((s) => s.toJson()).toList()),
       );
       debugPrint('Migrated ${newCustoms.length} custom suggestions');
+    } else if (rawCustoms is String) {
+      // Already v2 JSON (previous partial run). Feed its title→id
+      // pairs into the resolver so favorites/history that still hold
+      // custom *titles* resolve to the same ids.
+      try {
+        final decoded = jsonDecode(rawCustoms);
+        if (decoded is List) {
+          for (final entry in decoded) {
+            if (entry is Map<String, dynamic>) {
+              final id = entry['id'];
+              final title = entry['title'];
+              if (id is String && title is String) {
+                resolver[title.toLowerCase()] = id;
+                knownIds.add(id);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('v2 customSuggestions unreadable during re-run: $e');
+      }
     }
 
     // 3. Migrate favorites (List<String> of titles → List<String> of ids).
     final oldFavorites = prefs.getStringList('favoriteActivities');
     if (oldFavorites != null) {
       final newFavorites = oldFavorites
-          .map((title) => _resolveOrSynthesize(title, resolver))
+          .map((title) => _resolveOrSynthesize(title, resolver, knownIds))
           .toList();
       await prefs.setStringList('favoriteActivities', newFavorites);
       debugPrint('Migrated ${newFavorites.length} favorites');
@@ -102,7 +145,7 @@ class MigrationService {
         final decoded = jsonDecode(oldHistoryJson) as Map<String, dynamic>;
         final newHistory = <String, dynamic>{};
         decoded.forEach((title, value) {
-          final id = _resolveOrSynthesize(title, resolver);
+          final id = _resolveOrSynthesize(title, resolver, knownIds);
           newHistory[id] = value;
         });
         await prefs.setString('activityHistory', jsonEncode(newHistory));
@@ -120,7 +163,7 @@ class MigrationService {
         final decoded = jsonDecode(oldRejectionsJson) as Map<String, dynamic>;
         final newRejections = <String, dynamic>{};
         decoded.forEach((title, value) {
-          final id = _resolveOrSynthesize(title, resolver);
+          final id = _resolveOrSynthesize(title, resolver, knownIds);
           newRejections[id] = value;
         });
         await prefs.setString(
@@ -137,25 +180,34 @@ class MigrationService {
     final oldDislikes = prefs.getStringList('activity_dislikes');
     if (oldDislikes != null) {
       final newDislikes = oldDislikes
-          .map((title) => _resolveOrSynthesize(title, resolver))
+          .map((title) => _resolveOrSynthesize(title, resolver, knownIds))
           .toList();
       await prefs.setStringList('activity_dislikes', newDislikes);
       debugPrint('Migrated ${newDislikes.length} dislikes');
     }
   }
 
-  /// Look up [title] in [resolver]. If not found, generate a stable
-  /// `custom-<hash>` id, register it in the resolver so future lookups
-  /// return the same id, and return it.
+  /// Resolve a persisted v1 value to a v2 id.
+  ///
+  /// Values that are already ids — catalog/custom ids from a previous
+  /// partial run — pass through unchanged, keeping the migration
+  /// idempotent. Otherwise look [title] up in [resolver]; if not
+  /// found, generate a stable `custom-<hash>` id, register it so
+  /// future lookups return the same id, and return it.
   static String _resolveOrSynthesize(
     String title,
     Map<String, String> resolver,
+    Set<String> knownIds,
   ) {
+    if (knownIds.contains(title) || title.startsWith('custom-')) {
+      return title; // already an id
+    }
     final lower = title.toLowerCase();
     final existing = resolver[lower];
     if (existing != null) return existing;
     final id = _customIdFor(title, resolver.values.toSet());
     resolver[lower] = id;
+    knownIds.add(id);
     return id;
   }
 

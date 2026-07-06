@@ -196,7 +196,6 @@ class ProfilePage extends StatelessWidget {
   
   // Build preferences card
   Widget _buildPreferencesCard(BuildContext context) {
-    final theme = Theme.of(context);
     final preferencesModel = Provider.of<PreferencesModel>(context);
     
     return Card(
@@ -235,7 +234,14 @@ class ProfilePage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.access_time),
             title: const Text('Time of Day'),
-            subtitle: Text(preferencesModel.timeOfDay ?? 'Not set'),
+            // With auto-detect on (the default), timeOfDay stays null
+            // and the app uses the detected value — show that instead
+            // of a misleading 'Not set'.
+            subtitle: Text(
+              preferencesModel.autoDetectTime
+                  ? '${preferencesModel.effectiveTimeOfDay} (auto)'
+                  : preferencesModel.timeOfDay ?? 'Not set',
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.push(
@@ -268,7 +274,7 @@ class ProfilePage extends StatelessWidget {
                 Icon(
                   Icons.favorite_border,
                   size: 48,
-                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -278,7 +284,7 @@ class ProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Add activities to your favorites by tapping the heart icon on the suggestions.',
+                  'Tap the heart on a dealt card to keep it here.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -432,7 +438,7 @@ class ProfilePage extends StatelessWidget {
                     Icon(
                       Icons.lightbulb_outline,
                       size: 48,
-                      color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
                     ),
                     const SizedBox(height: 16),
                     Text(

@@ -190,12 +190,25 @@ class _CardRevealPageState extends State<CardRevealPage>
   List<Suggestion>? _buildPool() {
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
     final repo = Provider.of<SuggestionsRepository>(context, listen: false);
-    // Weather is opt-in via the Personalization toggle. When off we
-    // pass null so the filter pipeline skips its weather stage
-    // entirely — and the WeatherService is never read or called.
-    final weather = prefs.useWeather
-        ? Provider.of<WeatherService>(context, listen: false).currentWeather
-        : null;
+    // Weather is opt-in via the Personalization toggle (and requires
+    // the location consent toggle). When off we pass null so the
+    // filter pipeline skips its weather stage entirely — and the
+    // WeatherService is never read or called.
+    //
+    // freshWeather goes stale after the cache TTL, so a session left
+    // open overnight deals against no weather rather than yesterday's;
+    // the fire-and-forget refresh below repopulates it for next deal.
+    WeatherData? weather;
+    if (prefs.useWeather && prefs.useLocation) {
+      final weatherService =
+          Provider.of<WeatherService>(context, listen: false);
+      weather = weatherService.freshWeather;
+      if (weather == null &&
+          WeatherService.isConfigured &&
+          !weatherService.isLoading) {
+        unawaited(weatherService.fetchWeather());
+      }
+    }
     final feedback = Provider.of<FeedbackModel>(context, listen: false);
 
     if (!prefs.arePreferencesComplete) return null;
@@ -685,11 +698,37 @@ class _CardRevealPageState extends State<CardRevealPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                chosen.title,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      chosen.title,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  // The only place a favorite can be *added* — keep it
+                  // on the card the user just committed to.
+                  Consumer<PreferencesModel>(
+                    builder: (context, prefs, _) {
+                      final isFav = prefs.isFavorite(chosen.id);
+                      return IconButton(
+                        onPressed: () => prefs.toggleFavorite(chosen.id),
+                        tooltip: isFav
+                            ? 'Remove from favorites'
+                            : 'Add to favorites',
+                        icon: Icon(
+                          isFav ? Icons.favorite : Icons.favorite_border,
+                          color: isFav
+                              ? Colors.red
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
               if (chosen.description.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -726,11 +765,24 @@ class _CardRevealPageState extends State<CardRevealPage>
                 const SizedBox(height: 14),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => _showNearby(chosen),
-                    icon: Icon(chosen.goOutCategory!.icon, size: 18),
-                    label: Text(
-                      'Find a ${chosen.goOutCategory!.label.toLowerCase()} nearby',
+                  child: Consumer<PremiumService>(
+                    builder: (context, premium, _) => FilledButton.tonalIcon(
+                      onPressed: () => _showNearby(chosen),
+                      icon: Icon(chosen.goOutCategory!.icon, size: 18),
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Find a ${chosen.goOutCategory!.label.toLowerCase()} nearby',
+                          ),
+                          // Honest gating: free users see the lock
+                          // before they tap, matching the deck picker.
+                          if (!premium.isPremium) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.lock, size: 14),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

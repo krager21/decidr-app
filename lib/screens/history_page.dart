@@ -9,7 +9,6 @@ class HistoryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final historyModel = Provider.of<ActivityHistoryModel>(context);
     final recentActivities = historyModel.getRecentActivities(limit: 20);
     
@@ -102,7 +101,7 @@ class HistoryPage extends StatelessWidget {
             Icon(
               Icons.history,
               size: 80,
-              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 24),
             Text(

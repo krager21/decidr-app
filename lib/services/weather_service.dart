@@ -9,6 +9,10 @@ import '../models/weather_model.dart';
 /// Provides weather information based on user location to help
 /// filter activity suggestions appropriately.
 class WeatherService extends ChangeNotifier {
+  final http.Client _client;
+
+  WeatherService({http.Client? client}) : _client = client ?? http.Client();
+
   WeatherData? _currentWeather;
   bool _isLoading = false;
   String? _error;
@@ -31,8 +35,21 @@ class WeatherService extends ChangeNotifier {
   /// Whether the weather service has been configured with an API key.
   static bool get isConfigured => _apiKey.isNotEmpty;
 
-  /// Get current weather data (returns cached data if still valid)
+  /// The most recently fetched weather, however old. Prefer
+  /// [freshWeather] for anything that *acts* on the data.
   WeatherData? get currentWeather => _currentWeather;
+
+  /// The current weather only while it's within [cacheDuration];
+  /// null once stale. The deal pipeline uses this so a long-lived
+  /// session doesn't keep filtering against hours-old conditions.
+  WeatherData? get freshWeather {
+    final data = _currentWeather;
+    if (data == null) return null;
+    if (DateTime.now().difference(data.fetchedAt) >= cacheDuration) {
+      return null;
+    }
+    return data;
+  }
 
   /// Check if service is currently fetching weather
   bool get isLoading => _isLoading;
@@ -50,6 +67,19 @@ class WeatherService extends ChangeNotifier {
         DateTime.now().difference(_currentWeather!.fetchedAt) < cacheDuration) {
       debugPrint('Using cached weather data');
       return _currentWeather;
+    }
+
+    // Check the API key before anything else — in particular before
+    // touching the GPS. An unconfigured build must never trigger a
+    // location-permission prompt.
+    if (!isConfigured) {
+      debugPrint(
+        'Weather API key not configured. '
+        'Pass --dart-define=OPENWEATHER_API_KEY=... at build time.',
+      );
+      _error = 'Weather service not configured';
+      notifyListeners();
+      return null;
     }
 
     _isLoading = true;
@@ -70,24 +100,12 @@ class WeatherService extends ChangeNotifier {
         lon = position.longitude;
       }
 
-      // Check if API key is set (supplied via --dart-define at build time)
-      if (!isConfigured) {
-        debugPrint(
-          'Weather API key not configured. '
-          'Pass --dart-define=OPENWEATHER_API_KEY=... at build time.',
-        );
-        _error = 'Weather service not configured';
-        _isLoading = false;
-        notifyListeners();
-        return null;
-      }
-
       // Fetch from OpenWeatherMap API
       final url = Uri.parse(
         'https://api.openweathermap.org/data/2.5/weather?lat=$lat&lon=$lon&appid=$_apiKey&units=metric',
       );
 
-      final response = await http.get(url);
+      final response = await _client.get(url);
 
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body) as Map<String, dynamic>;
@@ -95,12 +113,15 @@ class WeatherService extends ChangeNotifier {
         _error = null;
         debugPrint('Fetched weather: $_currentWeather');
       } else {
-        _error = 'Failed to fetch weather: ${response.statusCode}';
+        _error = 'Couldn’t fetch weather (HTTP ${response.statusCode})';
         debugPrint(_error);
       }
     } catch (e) {
-      _error = 'Error fetching weather: $e';
-      debugPrint(_error);
+      // Keep the user-visible message generic: exception text can
+      // embed the request URL — API key and coordinates included —
+      // and this string is rendered verbatim in Settings.
+      _error = 'Couldn’t fetch weather — check your connection';
+      debugPrint('Weather fetch failed: ${_sanitize(e)}');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -108,6 +129,10 @@ class WeatherService extends ChangeNotifier {
 
     return _currentWeather;
   }
+
+  /// Strip the API key out of exception text before it reaches logs.
+  static String _sanitize(Object e) =>
+      e.toString().replaceAll(_apiKey, '<redacted>');
 
   /// Get current device position using Geolocator
   ///

@@ -80,8 +80,13 @@ class SuggestionsRepository extends ChangeNotifier {
       customSuggestions = decoded
           .map((e) => Suggestion.fromJson(e as Map<String, dynamic>))
           .toList();
-    } on FormatException catch (e) {
-      debugPrint('customSuggestions JSON malformed: $e — resetting');
+    } catch (e) {
+      // Broad on purpose: beyond FormatException, a v1-shaped or
+      // partially-written payload throws TypeError from the casts, and
+      // an unknown enum name (downgrade after an upgrade wrote one)
+      // throws ArgumentError from values.byName. Any of these must
+      // reset rather than brick startup.
+      debugPrint('customSuggestions unreadable: $e — resetting');
       customSuggestions = [];
     }
     notifyListeners();

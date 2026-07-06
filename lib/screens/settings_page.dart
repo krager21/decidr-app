@@ -6,6 +6,7 @@ import '../models/preferences_model.dart';
 import '../services/context_service.dart';
 import '../services/premium_service.dart';
 import '../services/weather_service.dart';
+import '../utils/constants.dart';
 import '../widgets/paywall_sheet.dart';
 import '../widgets/premium_gate.dart';
 import 'interests_picker_page.dart';
@@ -519,7 +520,7 @@ class SettingsPage extends StatelessWidget {
         ),
         ListTile(
           title: const Text('About Decidr'),
-          subtitle: const Text('Version 2.0.0'),
+          subtitle: const Text('Version ${AppConstants.appVersion}'),
           leading: const Icon(Icons.info_outline),
           onTap: () {
             _showAboutDialog(context);
@@ -576,37 +577,32 @@ class SettingsPage extends StatelessWidget {
   void _showAboutDialog(BuildContext context) {
     showAboutDialog(
       context: context,
-      applicationName: 'Decidr',
-      applicationVersion: '2.0.0',
+      applicationName: AppConstants.appName,
+      applicationVersion: AppConstants.appVersion,
       applicationIcon: Icon(
         Icons.shuffle_rounded,
         size: 48,
         color: Theme.of(context).colorScheme.primary,
       ),
-      applicationLegalese: '© 2025 Decidr App',
+      applicationLegalese: AppConstants.appLegalese,
       children: [
         const SizedBox(height: 16),
-        const Text(
-          'Decidr helps you make decisions by dealing you three options. '
-          'Get personalised activity suggestions based on your mood, '
-          'energy, and time.',
-        ),
+        const Text(AppConstants.appDescription),
         const SizedBox(height: 16),
-        const Text(
-          'Enhanced with Material 3 design, dynamic themes, and personalized suggestions.',
-        ),
+        const Text(AppConstants.appEnhancedFeatures),
       ],
     );
   }
   
-  // Show feedback dialog
+  /// Feedback goes out as a real email — Send opens the user's mail
+  /// app with their text pre-filled. (The old dialog claimed to send
+  /// and silently discarded the text.)
   void _showFeedbackDialog(BuildContext context) {
-    final theme = Theme.of(context);
     final textController = TextEditingController();
-    
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Send Feedback'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -626,19 +622,34 @@ class SettingsPage extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
             },
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Thanks for your feedback!'),
-                  behavior: SnackBarBehavior.floating,
-                ),
+            onPressed: () async {
+              final body = textController.text.trim();
+              Navigator.pop(dialogContext);
+              final uri = Uri(
+                scheme: 'mailto',
+                path: AppConstants.supportEmail,
+                query: 'subject=${Uri.encodeComponent('Decidr feedback')}'
+                    '&body=${Uri.encodeComponent(body)}',
               );
+              try {
+                await launchUrl(uri);
+              } catch (_) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'No mail app found — reach us at '
+                      '${AppConstants.supportEmail}.',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
             },
             child: const Text('Send'),
           ),

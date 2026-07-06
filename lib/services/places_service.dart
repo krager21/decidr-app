@@ -74,7 +74,10 @@ class PlacesService extends ChangeNotifier {
     if (lat == null || lon == null) {
       final pos = await _getCurrentPosition();
       if (pos == null) {
-        // _error is set by _getCurrentPosition.
+        // _error is set by _getCurrentPosition. Notify so widgets
+        // watching error/isLoading can render the failure — an empty
+        // return alone is indistinguishable from "no places found".
+        notifyListeners();
         return const [];
       }
       lat = pos.latitude;
@@ -114,8 +117,9 @@ class PlacesService extends ChangeNotifier {
       notifyListeners();
       return places;
     } catch (e) {
-      _error = 'Error fetching places: $e';
-      debugPrint(_error);
+      // Generic user-visible message; the detail goes to the log only.
+      _error = 'Couldn’t reach the places service';
+      debugPrint('Places fetch failed: $e');
       _isLoading = false;
       notifyListeners();
       return const [];
@@ -334,11 +338,13 @@ class PlacesService extends ChangeNotifier {
           accuracy: LocationAccuracy.low,
         ),
       );
-      debugPrint('[PlacesService] got position: ${pos.latitude}, ${pos.longitude}');
+      // Deliberately not logging the coordinates: debugPrint is not
+      // stripped from release builds and lands in the OS system log.
+      debugPrint('[PlacesService] got a position fix');
       return pos;
     } catch (e) {
-      _error = 'Error getting location: $e';
-      debugPrint(_error);
+      _error = 'Couldn’t determine your location';
+      debugPrint('Places location lookup failed: $e');
       return null;
     }
   }

@@ -1,12 +1,11 @@
 {
-    "name": "decidr_app",
-    "short_name": "decidr_app",
+    "name": "Decidr",
+    "short_name": "Decidr",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#1E1B4B",
+    "theme_color": "#6750A4",
+    "description": "Decidr deals you a card so you stop deliberating and start doing.",
     "prefer_related_applications": false,
     "icons": [
         {

@@ -52,7 +52,7 @@ class WelcomePage extends StatelessWidget {
                     Text(
                       'Your personal decision assistant',
                       style: theme.textTheme.titleLarge?.copyWith(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                       ),
                       textAlign: TextAlign.center,
                     ),

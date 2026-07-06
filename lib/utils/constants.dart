@@ -112,8 +112,11 @@ class AppConstants {
   AppConstants._();
 
   static const String appName = 'Decidr';
-  static const String appVersion = '2.0.0';
-  static const String appLegalese = '© 2025 Decidr App';
+  static const String appVersion = '2.1.0';
+  static const String appLegalese = '© 2026 Decidr App';
+
+  /// Where Help & Feedback sends mail.
+  static const String supportEmail = 'krager21@gmail.com';
   static const String appDescription =
       'Decidr helps you make decisions by dealing you three options. '
       'Get personalised activity suggestions based on your mood, '
