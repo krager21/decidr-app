@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../data/deck_themes.dart';
 import '../models/preferences_model.dart';
 import '../services/context_service.dart';
+import '../services/premium_service.dart';
 import '../services/weather_service.dart';
+import '../widgets/paywall_sheet.dart';
 import '../widgets/premium_gate.dart';
 import 'interests_picker_page.dart';
 
@@ -22,6 +25,8 @@ class SettingsPage extends StatelessWidget {
           _buildThemeSettings(context),
           const Divider(),
           _buildPersonalizationSettings(context),
+          const Divider(),
+          _buildPremiumSettings(context),
           const Divider(),
           _buildExperienceSettings(context),
           const Divider(),
@@ -72,8 +77,7 @@ class SettingsPage extends StatelessWidget {
   }
 
   /// Horizontal scroller of card-back theme previews. Tap to select.
-  /// Premium decks route through [_showPremiumComingSoonDialog] today;
-  /// Phase 4 swaps that for the real paywall.
+  /// Premium decks route through the paywall via [ensurePremium].
   Widget _buildDeckPicker(
     BuildContext context,
     ThemeData theme,
@@ -219,17 +223,122 @@ class SettingsPage extends StatelessWidget {
   }
 
   /// Apply [deck] if it's free or the user is premium; otherwise
-  /// route through the shared premium-gate dialog. Phase 4 replaces
-  /// the dialog with the real paywall once entitlements are wired.
-  void _selectDeck(BuildContext context, DeckTheme deck) {
+  /// route through the paywall — and apply the deck anyway if the
+  /// user upgrades mid-flow, completing their original intent.
+  Future<void> _selectDeck(BuildContext context, DeckTheme deck) async {
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
-    if (!deck.isPremium || hasPremium()) {
-      prefs.setPreference(PreferenceKey.colorTheme, deck.id);
+    if (deck.isPremium &&
+        !await ensurePremium(
+          context,
+          featureName: 'The "${deck.name}" deck',
+        )) {
       return;
     }
-    showPremiumComingSoonDialog(
-      context,
-      featureName: 'The "${deck.name}" deck',
+    prefs.setPreference(PreferenceKey.colorTheme, deck.id);
+  }
+
+  /// Premium status + purchase entry points. The paywall itself
+  /// handles the "store not configured in this build" state, so this
+  /// section can always offer the upgrade row.
+  Widget _buildPremiumSettings(BuildContext context) {
+    final theme = Theme.of(context);
+    final premium = Provider.of<PremiumService>(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            'Decidr Premium',
+            style: theme.textTheme.titleLarge,
+          ),
+        ),
+        if (premium.isPremium) ...[
+          ListTile(
+            leading: Icon(
+              Icons.auto_awesome,
+              color: theme.colorScheme.primary,
+            ),
+            title: const Text('Premium active'),
+            subtitle: const Text(
+              'Themed decks, Nearby places, unlimited custom cards',
+            ),
+            trailing: Icon(
+              Icons.check_circle,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          if (premium.storeAvailable)
+            ListTile(
+              leading: const Icon(Icons.manage_accounts_outlined),
+              title: const Text('Manage subscription'),
+              onTap: () => _openSubscriptionManagement(context, premium),
+            ),
+        ] else ...[
+          ListTile(
+            leading: Icon(
+              Icons.auto_awesome,
+              color: theme.colorScheme.primary,
+            ),
+            title: const Text('Upgrade to Premium'),
+            subtitle: const Text(
+              'Themed decks, Nearby places, unlimited custom cards',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showPaywall(context),
+          ),
+          if (premium.storeAvailable)
+            ListTile(
+              leading: const Icon(Icons.restore),
+              title: const Text('Restore purchases'),
+              subtitle: const Text('Bought Premium on another device?'),
+              onTap: () => _restorePurchases(context, premium),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _openSubscriptionManagement(
+    BuildContext context,
+    PremiumService premium,
+  ) async {
+    final url = await premium.managementUrl();
+    if (url == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Manage your subscription in your app store.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Nothing useful to do — the store settings remain reachable
+      // through the OS.
+    }
+  }
+
+  Future<void> _restorePurchases(
+    BuildContext context,
+    PremiumService premium,
+  ) async {
+    final restored = await premium.restore();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          restored
+              ? 'Premium restored — welcome back!'
+              : 'No previous purchases found.',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -295,8 +404,9 @@ class SettingsPage extends StatelessWidget {
             prefs.setPreference(PreferenceKey.useWeather, value);
             // When turning on, kick off a fetch immediately so the
             // user sees the subtitle update without waiting for the
-            // next app launch.
-            if (value && WeatherService.isConfigured) {
+            // next app launch. Weather reads the device GPS, so it
+            // also requires the location consent toggle.
+            if (value && prefs.useLocation && WeatherService.isConfigured) {
               weather.fetchWeather();
             }
           },
@@ -304,12 +414,17 @@ class SettingsPage extends StatelessWidget {
         SwitchListTile(
           title: const Text('Use my location'),
           subtitle: const Text(
-            'Required for weather and (soon) nearby places',
+            'Required for weather and nearby places',
           ),
           secondary: const Icon(Icons.my_location),
           value: prefs.useLocation,
           onChanged: (value) {
             prefs.setPreference(PreferenceKey.useLocation, value);
+            // Granting location consent while weather is already on
+            // unblocks the pending fetch.
+            if (value && prefs.useWeather && WeatherService.isConfigured) {
+              weather.fetchWeather();
+            }
           },
         ),
         SwitchListTile(
@@ -353,6 +468,9 @@ class SettingsPage extends StatelessWidget {
     }
     if (!prefs.useWeather) {
       return 'Let conditions outside bias the deal';
+    }
+    if (!prefs.useLocation) {
+      return 'Turn on “Use my location” below to fetch weather';
     }
     if (weather.isLoading) {
       return 'Fetching local weather…';

@@ -800,20 +800,18 @@ class _CardRevealPageState extends State<CardRevealPage>
     );
   }
 
-  /// Premium-gated entry point for the Nearby sheet. Free users see
-  /// the placeholder upsell dialog; premium users get the sheet, or
-  /// a prompt to enable location if their toggle is off.
+  /// Premium-gated entry point for the Nearby sheet. Free users get
+  /// the paywall — and continue straight into the sheet if they
+  /// upgrade mid-flow. Premium users get the sheet, or a prompt to
+  /// enable location if their toggle is off.
   Future<void> _showNearby(Suggestion chosen) async {
     final category = chosen.goOutCategory;
     if (category == null) return; // defensive — UI shouldn't allow this
 
-    if (!hasPremium()) {
-      await showPremiumComingSoonDialog(
-        context,
-        featureName: 'Nearby places',
-      );
+    if (!await ensurePremium(context, featureName: 'Nearby places')) {
       return;
     }
+    if (!mounted) return;
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
     if (!prefs.useLocation) {
       await showDialog<void>(

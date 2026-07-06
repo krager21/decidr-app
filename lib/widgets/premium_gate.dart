@@ -1,51 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-/// Placeholder "coming soon" dialog used until Phase 4 (RevenueCat
-/// paywall) lands. Every premium feature trigger today routes
-/// through this — themed decks, nearby places, and anything that
-/// follows. Phase 5 will swap the body for an actual paywall route.
+import '../services/premium_service.dart';
+import 'paywall_sheet.dart';
+
+/// Gate an action behind Decidr Premium.
 ///
-/// [featureName] appears inline in the message so the dialog says
-/// what's gated, e.g. *"Nearby places is part of Decidr Premium…"*.
+/// Returns immediately with `true` when the user is already premium.
+/// Otherwise shows the paywall (contextualized with [featureName]) and
+/// returns the entitlement state after it closes — `true` when the
+/// user purchased or restored mid-flow, so callers can complete the
+/// original action in one tap:
 ///
-/// Returns the showDialog future so callers can await dismissal.
-Future<void> showPremiumComingSoonDialog(
+///   if (await ensurePremium(context, featureName: 'Nearby places')) {
+///     if (!context.mounted) return;
+///     // ... do the premium thing
+///   }
+Future<bool> ensurePremium(
   BuildContext context, {
   required String featureName,
-}) {
-  return showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Decidr Premium'),
-      content: Text(
-        '$featureName is part of Decidr Premium — coming soon. '
-        'We\u2019ll let you know when it lands.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK'),
-        ),
-      ],
-    ),
-  );
-}
-
-/// Whether the user has unlocked premium features.
-///
-/// Stub for Phase 3/6 — Phase 4 will replace this body with a real
-/// check against RevenueCat's entitlements. Until then, premium is
-/// off by default, but a `--dart-define=DECIDR_PREMIUM_OVERRIDE=true`
-/// flag lets you flip it on at build time for end-to-end testing of
-/// premium-gated features (nearby places, themed decks) without
-/// waiting on the real paywall.
-///
-/// Usage:
-///   flutter run --dart-define=DECIDR_PREMIUM_OVERRIDE=true [...]
-bool hasPremium() {
-  const override = bool.fromEnvironment(
-    'DECIDR_PREMIUM_OVERRIDE',
-    defaultValue: false,
-  );
-  return override;
+}) async {
+  final premium = context.read<PremiumService>();
+  if (premium.isPremium) return true;
+  await showPaywall(context, featureName: featureName);
+  return premium.isPremium;
 }

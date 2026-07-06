@@ -34,7 +34,17 @@ class SuggestionConstants {
   static const int customSuggestionMaxLength = 50;
 
   /// Maximum number of custom suggestions a user can save.
+  /// This is the Premium ceiling; free users get
+  /// [customSuggestionFreeMaxCount].
   static const int customSuggestionMaxCount = 100;
+
+  /// Custom-suggestion cap for the free tier. Hitting it routes the
+  /// user to the Premium paywall.
+  static const int customSuggestionFreeMaxCount = 10;
+
+  /// Saved preference profiles: free-tier cap and Premium ceiling.
+  static const int savedProfilesFreeMaxCount = 2;
+  static const int savedProfilesMaxCount = 10;
 }
 
 /// Constants for UI elements

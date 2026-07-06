@@ -1,0 +1,157 @@
+import 'package:flutter/foundation.dart';
+
+import 'purchases_gateway.dart';
+
+/// Single source of truth for the Decidr Premium entitlement.
+///
+/// Wraps a [PurchasesGateway] (RevenueCat in production, a fake in
+/// tests) and exposes entitlement state as a [ChangeNotifier] so gated
+/// UI rebuilds when premium unlocks — mid-session, after a restore, or
+/// via a cross-device renewal pushed by the store.
+///
+/// Degrades gracefully along three axes:
+///  * **No API key configured** — [storeConfigured] is false, [init]
+///    is a no-op, and the paywall shows its "not available yet" state.
+///    This keeps the app fully functional before the RevenueCat
+///    account exists.
+///  * **Dev override** — `--dart-define=DECIDR_PREMIUM_OVERRIDE=true`
+///    forces premium on for end-to-end testing of gated features.
+///    Ignored in release builds so a copy-pasted dev command line can
+///    never ship premium unlocked to real users.
+///  * **Gateway errors** — every store call is caught; failures leave
+///    the user on the free tier rather than crashing.
+///
+/// Keys are injected at build time:
+///   flutter build ios   --dart-define=REVENUECAT_API_KEY_APPLE=appl_...
+///   flutter build macos  --dart-define=REVENUECAT_API_KEY_APPLE=appl_...
+///   flutter build apk   --dart-define=REVENUECAT_API_KEY_GOOGLE=goog_...
+///   flutter build web   --dart-define=REVENUECAT_API_KEY_WEB=rcb_...
+class PremiumService extends ChangeNotifier {
+  /// RevenueCat entitlement identifier gating all premium features.
+  static const String entitlementId = 'premium';
+
+  static const String _appleKey =
+      String.fromEnvironment('REVENUECAT_API_KEY_APPLE');
+  static const String _googleKey =
+      String.fromEnvironment('REVENUECAT_API_KEY_GOOGLE');
+  static const String _webKey =
+      String.fromEnvironment('REVENUECAT_API_KEY_WEB');
+  static const bool _override =
+      bool.fromEnvironment('DECIDR_PREMIUM_OVERRIDE');
+
+  /// Whether the dev-time premium override is active in this build.
+  /// Deliberately inert in release mode — see class docs.
+  static bool get overrideActive => _override && !kReleaseMode;
+
+  /// The RevenueCat key for the platform we're running on, or '' when
+  /// none applies (key not provided, or unsupported desktop platform).
+  static String get platformApiKey {
+    if (kIsWeb) return _webKey;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        return _appleKey;
+      case TargetPlatform.android:
+        return _googleKey;
+      default:
+        return '';
+    }
+  }
+
+  /// Whether a store backend is available in this build. When false,
+  /// the paywall renders an informational state instead of packages.
+  static bool get storeConfigured => platformApiKey.isNotEmpty;
+
+  final PurchasesGateway _gateway;
+  final bool _storeAvailable;
+
+  bool _storePremium = false;
+  bool _initialized = false;
+
+  PremiumService({
+    PurchasesGateway? gateway,
+    bool? storeAvailable,
+  })  : _gateway = gateway ?? RevenueCatGateway(entitlementId: entitlementId),
+        _storeAvailable = storeAvailable ?? storeConfigured;
+
+  /// Whether premium features are unlocked right now.
+  bool get isPremium => overrideActive || _storePremium;
+
+  /// Whether purchases can actually be made in this build.
+  bool get storeAvailable => _storeAvailable;
+
+  /// One-line description of the most recent failed purchase/restore,
+  /// for a snackbar. Null when the last operation succeeded.
+  String? get lastErrorMessage => _gateway.lastErrorMessage;
+
+  /// Configure the store SDK and load the current entitlement state.
+  /// Safe to call at every app launch; a no-op without a store key.
+  /// Never throws — store outages leave the user on the free tier.
+  Future<void> init() async {
+    if (!_storeAvailable || _initialized) return;
+    _initialized = true;
+    try {
+      await _gateway.configure(platformApiKey);
+      _gateway.listenForChanges(_onEntitlementChanged);
+      _onEntitlementChanged(await _gateway.fetchIsPremium());
+    } catch (e) {
+      debugPrint('PremiumService init failed: $e');
+    }
+  }
+
+  /// Packages the paywall can offer. Empty on failure or when the
+  /// store isn't configured.
+  Future<List<PremiumPackage>> loadPackages() async {
+    if (!_storeAvailable) return const [];
+    try {
+      return await _gateway.fetchPackages();
+    } catch (e) {
+      debugPrint('PremiumService loadPackages failed: $e');
+      return const [];
+    }
+  }
+
+  /// Purchase [package]; on success the entitlement flips immediately
+  /// and listeners are notified.
+  Future<PurchaseOutcome> purchase(PremiumPackage package) async {
+    if (!_storeAvailable) return PurchaseOutcome.failed;
+    try {
+      final outcome = await _gateway.purchase(package);
+      if (outcome == PurchaseOutcome.success) {
+        _onEntitlementChanged(true);
+      }
+      return outcome;
+    } catch (e) {
+      debugPrint('PremiumService purchase failed: $e');
+      return PurchaseOutcome.failed;
+    }
+  }
+
+  /// Restore purchases made on another device or install. Returns the
+  /// resulting premium state.
+  Future<bool> restore() async {
+    if (!_storeAvailable) return isPremium;
+    try {
+      _onEntitlementChanged(await _gateway.restore());
+    } catch (e) {
+      debugPrint('PremiumService restore failed: $e');
+    }
+    return isPremium;
+  }
+
+  /// Store-provided subscription management URL, or null.
+  Future<String?> managementUrl() async {
+    if (!_storeAvailable) return null;
+    try {
+      return await _gateway.fetchManagementUrl();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _onEntitlementChanged(bool isPremium) {
+    if (_storePremium == isPremium) return;
+    _storePremium = isPremium;
+    notifyListeners();
+  }
+}

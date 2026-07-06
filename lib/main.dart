@@ -11,6 +11,7 @@ import 'models/activity_history_model.dart';
 import 'models/feedback_model.dart';
 import 'services/migration_service.dart';
 import 'services/places_service.dart';
+import 'services/premium_service.dart';
 import 'services/weather_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/settings_page.dart';
@@ -67,11 +68,20 @@ Future<void> _bootstrap() async {
   // time. Fire-and-forget — the service is a ChangeNotifier, so the
   // card-reveal page will pick up the data when it arrives.
   final weatherService = WeatherService();
-  if (preferencesModel.useWeather && WeatherService.isConfigured) {
+  // Weather requires BOTH opt-ins: the feature toggle and the location
+  // consent toggle — fetching reads the device GPS.
+  if (preferencesModel.useWeather &&
+      preferencesModel.useLocation &&
+      WeatherService.isConfigured) {
     // Don't await; we don't want to block app launch on a network
     // round-trip. Failures are logged inside the service.
     unawaited(weatherService.fetchWeather());
   }
+
+  // Premium entitlements (RevenueCat). init() is a no-op when no store
+  // API key is baked into the build; failures leave the free tier.
+  final premiumService = PremiumService();
+  unawaited(premiumService.init());
 
   runApp(
     MultiProvider(
@@ -82,6 +92,7 @@ Future<void> _bootstrap() async {
         ChangeNotifierProvider(create: (_) => feedbackModel),
         ChangeNotifierProvider(create: (_) => weatherService),
         ChangeNotifierProvider(create: (_) => PlacesService()),
+        ChangeNotifierProvider(create: (_) => premiumService),
       ],
       child: const DecidrApp(),
     ),
