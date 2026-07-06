@@ -11,9 +11,11 @@ import '../models/preferences_model.dart';
 import '../models/suggestion.dart';
 import '../models/suggestions_repository.dart';
 import '../models/weather_model.dart';
+import '../services/premium_service.dart';
 import '../services/weather_service.dart';
 import '../utils/constants.dart';
 import '../widgets/decision_card.dart';
+import '../widgets/paywall_sheet.dart';
 import '../widgets/premium_gate.dart';
 import 'interests_picker_page.dart';
 import 'nearby_sheet.dart';
@@ -880,17 +882,36 @@ class _CardRevealPageState extends State<CardRevealPage>
           ),
           FilledButton(
             onPressed: () {
+              final premium =
+                  Provider.of<PremiumService>(context, listen: false)
+                      .isPremium;
               final input = textController.text.trim();
-              final added = suggestionsRepo.addCustomSuggestion(input);
+              final result = suggestionsRepo.addCustomSuggestionChecked(
+                input,
+                maxCount: premium
+                    ? SuggestionConstants.customSuggestionMaxCount
+                    : SuggestionConstants.customSuggestionFreeMaxCount,
+              );
               Navigator.pop(dialogContext);
               if (!mounted) return;
+              if (result == AddSuggestionResult.capReached && !premium) {
+                // Free deck is full — the paywall explains the upgrade.
+                showPaywall(context, featureName: 'Unlimited custom cards');
+                return;
+              }
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(
-                    added
-                        ? 'Added "$input" to your deck.'
-                        : 'Could not add (empty, duplicate, or list full).',
-                  ),
+                  content: Text(switch (result) {
+                    AddSuggestionResult.added =>
+                      'Added "$input" to your deck.',
+                    AddSuggestionResult.invalid =>
+                      'Type an activity first.',
+                    AddSuggestionResult.duplicate =>
+                      'That one is already in the deck.',
+                    AddSuggestionResult.capReached =>
+                      'Your custom deck is full '
+                          '(${SuggestionConstants.customSuggestionMaxCount} cards).',
+                  }),
                   behavior: SnackBarBehavior.floating,
                   duration: const Duration(seconds: 2),
                 ),

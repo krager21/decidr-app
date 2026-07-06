@@ -460,4 +460,35 @@ void main() {
       expect(entry.title, 'Pottery');
     });
   });
+
+  group('Custom suggestion entitlement caps', () {
+    test('checked add reports each rejection reason', () {
+      expect(repo.addCustomSuggestionChecked(''), AddSuggestionResult.invalid);
+      expect(repo.addCustomSuggestionChecked('a' * 60),
+          AddSuggestionResult.invalid);
+      expect(repo.addCustomSuggestionChecked('Pottery'),
+          AddSuggestionResult.added);
+      expect(repo.addCustomSuggestionChecked('pottery'),
+          AddSuggestionResult.duplicate);
+    });
+
+    test('free-tier cap blocks the Nth+1 card; higher cap unblocks', () {
+      for (var i = 0; i < 3; i++) {
+        expect(repo.addCustomSuggestionChecked('Card $i', maxCount: 3),
+            AddSuggestionResult.added);
+      }
+      expect(repo.addCustomSuggestionChecked('One more', maxCount: 3),
+          AddSuggestionResult.capReached);
+      // Same input passes with the premium ceiling — nothing was lost.
+      expect(repo.addCustomSuggestionChecked('One more', maxCount: 10),
+          AddSuggestionResult.added);
+    });
+
+    test('duplicates report as duplicate even when the cap is full', () {
+      expect(repo.addCustomSuggestionChecked('Pottery', maxCount: 1),
+          AddSuggestionResult.added);
+      expect(repo.addCustomSuggestionChecked('POTTERY', maxCount: 1),
+          AddSuggestionResult.duplicate);
+    });
+  });
 }

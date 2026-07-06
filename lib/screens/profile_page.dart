@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../models/preferences_model.dart';
 import '../models/suggestions_repository.dart';
 import '../models/activity_history_model.dart';
+import '../services/premium_service.dart';
+import '../widgets/paywall_sheet.dart';
 import 'questionnaire_page.dart';
 import 'settings_page.dart';
 import '../utils/constants.dart';
@@ -393,13 +395,12 @@ class ProfilePage extends StatelessWidget {
   
   // Show dialog to add custom suggestion
   void _showAddCustomSuggestionDialog(BuildContext context) {
-    final theme = Theme.of(context);
     final suggestionsRepo = Provider.of<SuggestionsRepository>(context, listen: false);
     final textController = TextEditingController();
-    
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Add Custom Suggestion'),
         content: TextField(
           controller: textController,
@@ -414,26 +415,43 @@ class ProfilePage extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
             },
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () {
-              final added = suggestionsRepo.addCustomSuggestion(
+              final premium =
+                  Provider.of<PremiumService>(context, listen: false)
+                      .isPremium;
+              final result = suggestionsRepo.addCustomSuggestionChecked(
                 textController.text,
+                maxCount: premium
+                    ? SuggestionConstants.customSuggestionMaxCount
+                    : SuggestionConstants.customSuggestionFreeMaxCount,
               );
-              if (added) {
-                Navigator.pop(context);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Could not add suggestion (empty, duplicate, or list full).',
-                    ),
-                  ),
-                );
+              if (result == AddSuggestionResult.added) {
+                Navigator.pop(dialogContext);
+                return;
               }
+              if (result == AddSuggestionResult.capReached && !premium) {
+                // Free deck is full — the paywall explains the upgrade.
+                Navigator.pop(dialogContext);
+                showPaywall(context, featureName: 'Unlimited custom cards');
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(switch (result) {
+                    AddSuggestionResult.invalid => 'Type an activity first.',
+                    AddSuggestionResult.duplicate =>
+                      'That one is already in the deck.',
+                    _ => 'Your custom deck is full '
+                        '(${SuggestionConstants.customSuggestionMaxCount} cards).',
+                  }),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             },
             child: const Text('Add'),
           ),

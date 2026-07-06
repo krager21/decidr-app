@@ -36,6 +36,21 @@ import 'weather_model.dart';
 ///   5. Favorites lifted to the top; remaining items ranked by score
 ///      with a shuffle within the top band for variety.
 ///   6. Take `count` (default 8), deduplicated by id.
+/// Outcome of an attempt to add a custom suggestion.
+enum AddSuggestionResult {
+  /// Saved and mixed into future deals.
+  added,
+
+  /// Empty or over the max length.
+  invalid,
+
+  /// Case-insensitive match against the catalog or existing customs.
+  duplicate,
+
+  /// The caller-supplied cap is full — upsell or explain.
+  capReached,
+}
+
 class SuggestionsRepository extends ChangeNotifier {
   final SharedPreferences _prefs;
 
@@ -151,36 +166,37 @@ class SuggestionsRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Add a custom user-defined suggestion.
+  /// Add a custom user-defined suggestion, reporting *why* a rejected
+  /// entry was rejected so the UI can react (e.g. route a cap-hit to
+  /// the Premium paywall).
   ///
   /// Trims whitespace, enforces a max length of
   /// [SuggestionConstants.customSuggestionMaxLength], deduplicates
   /// case-insensitively against both the catalog and the user's
-  /// existing customs, and caps the total count at
-  /// [SuggestionConstants.customSuggestionMaxCount].
+  /// existing customs, and caps the total count at [maxCount] — the
+  /// caller passes the free or Premium ceiling based on entitlement.
   ///
   /// On success a [Suggestion] is synthesized with a stable
   /// `custom-<hash>` id and permissive defaults (any time, any social
   /// context, hybrid activity, all moods) so it survives every filter.
-  ///
-  /// Returns `true` if the suggestion was added, `false` if it was
-  /// rejected (empty, too long, duplicate, or list is full).
-  bool addCustomSuggestion(String suggestion) {
+  AddSuggestionResult addCustomSuggestionChecked(
+    String suggestion, {
+    int maxCount = SuggestionConstants.customSuggestionMaxCount,
+  }) {
     final trimmed = suggestion.trim();
-    if (trimmed.isEmpty) return false;
+    if (trimmed.isEmpty) return AddSuggestionResult.invalid;
     if (trimmed.length > SuggestionConstants.customSuggestionMaxLength) {
-      return false;
-    }
-    if (customSuggestions.length >=
-        SuggestionConstants.customSuggestionMaxCount) {
-      return false;
+      return AddSuggestionResult.invalid;
     }
     final lower = trimmed.toLowerCase();
     if (customSuggestions.any((s) => s.title.toLowerCase() == lower)) {
-      return false;
+      return AddSuggestionResult.duplicate;
     }
     if (suggestionByTitle(trimmed) != null) {
-      return false; // already in the catalog
+      return AddSuggestionResult.duplicate; // already in the catalog
+    }
+    if (customSuggestions.length >= maxCount) {
+      return AddSuggestionResult.capReached;
     }
 
     final usedIds = <String>{
@@ -190,8 +206,13 @@ class SuggestionsRepository extends ChangeNotifier {
     final id = _customIdFor(trimmed, usedIds);
     customSuggestions.add(_buildCustom(trimmed, id));
     saveCustomSuggestions();
-    return true;
+    return AddSuggestionResult.added;
   }
+
+  /// Boolean convenience wrapper around [addCustomSuggestionChecked]
+  /// with the Premium ceiling. Prefer the checked variant in UI code.
+  bool addCustomSuggestion(String suggestion) =>
+      addCustomSuggestionChecked(suggestion) == AddSuggestionResult.added;
 
   /// Remove a custom suggestion by id or by exact title match.
   void removeCustomSuggestion(String idOrTitle) {
