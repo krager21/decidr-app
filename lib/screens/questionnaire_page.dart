@@ -316,7 +316,7 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
         ),
       ),
 
-      // Page 2: Energy level + weirdness tolerance
+      // Page 2: Energy level + weirdness tolerance + social context
       QuestionCard(
         question: 'How adventurous are you feeling?',
         description:
@@ -415,6 +415,43 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
                 Icon(Icons.auto_awesome, color: theme.colorScheme.primary),
               ],
             ),
+
+            const SizedBox(height: 24),
+
+            // Social context — optional, tap the selected chip to
+            // clear. The catalog tags hundreds of entries by company
+            // (partner/small group/large group); without this question
+            // that whole filter dimension sat dormant.
+            Text(
+              'Who’s with you?',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Optional — skip it and we’ll deal for any company.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: preferencesModel.socialOptions.map((option) {
+                final selected = preferencesModel.socialContext == option;
+                return ChoiceChip(
+                  label: Text(option),
+                  selected: selected,
+                  avatar: Icon(_getSocialIcon(option), size: 18),
+                  onSelected: (nowSelected) {
+                    preferencesModel.setPreference(
+                      PreferenceKey.socialContext,
+                      nowSelected ? option : null,
+                    );
+                  },
+                );
+              }).toList(),
+            ),
           ],
         ),
       ),
@@ -494,6 +531,22 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
     }
   }
   
+  // Get icon for social context
+  IconData _getSocialIcon(String social) {
+    switch (social) {
+      case 'Solo':
+        return Icons.person;
+      case 'Partner':
+        return Icons.favorite_outline;
+      case 'Small Group':
+        return Icons.group;
+      case 'Large Group':
+        return Icons.groups;
+      default:
+        return Icons.person_outline;
+    }
+  }
+
   // Get icon for time of day
   IconData _getTimeIcon(String time) {
     switch (time) {
