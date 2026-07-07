@@ -5,6 +5,7 @@ import '../models/preferences_model.dart';
 import '../widgets/question_card.dart';
 import '../widgets/save_profile_dialog.dart';
 import 'main_tabs_page.dart';
+import 'welcome_page.dart';
 
 /// Enhanced questionnaire page with multiple questions
 class QuestionnairePage extends StatelessWidget {
@@ -16,6 +17,16 @@ class QuestionnairePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Your Preferences'),
         elevation: 0,
+        // Always exit to the Welcome page. After the first completed
+        // questionnaire the Welcome route is removed from the stack
+        // (Continue uses pushAndRemoveUntil), so a plain pop would
+        // land wherever the questionnaire was opened from instead.
+        leading: BackButton(
+          onPressed: () => Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const WelcomePage()),
+            (route) => false,
+          ),
+        ),
       ),
       body: const QuestionnaireForm(),
     );
