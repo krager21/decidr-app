@@ -129,11 +129,12 @@ class _DecisionCardState extends State<DecisionCard>
   // ─── back face ─────────────────────────────────────────────────
 
   Widget _buildBackFace(ThemeData theme) {
-    // Pull the active deck theme from preferences. Unknown / legacy
-    // ids fall back to the default deck inside themeById, so the
-    // field is safe even when the user has a stale value persisted.
+    // Pull the active deck theme from preferences (including a
+    // session-only try-on override). Unknown / legacy ids fall back
+    // to the default deck inside themeById, so the field is safe even
+    // when the user has a stale value persisted.
     final deck = themeById(
-      Provider.of<PreferencesModel>(context).colorTheme,
+      Provider.of<PreferencesModel>(context).effectiveDeckId,
     );
     return Container(
       width: widget.width,

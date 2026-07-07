@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../data/deck_themes.dart';
 import '../models/activity_history_model.dart';
 import '../models/feedback_model.dart';
 import '../models/preferences_model.dart';
@@ -367,6 +368,28 @@ class _CardRevealPageState extends State<CardRevealPage>
     // app once. Idempotent — safe to call on every settle.
     if (!prefs.firstDealCompleted) {
       prefs.setPreference(PreferenceKey.firstDealCompleted, true);
+    }
+
+    // Deck try-on: this deal was the free preview. Give the user a
+    // beat to admire the settled card, then offer to keep the deck.
+    // Buying applies it permanently; declining reverts next deal.
+    final previewId = prefs.previewDeckId;
+    if (previewId != null) {
+      final deck = themeById(previewId);
+      Timer(const Duration(seconds: 2), () async {
+        if (!mounted || prefs.previewDeckId != previewId) return;
+        await showPaywall(
+          context,
+          featureName: 'Keeping the "${deck.name}" deck',
+        );
+        if (!mounted) return;
+        final premium =
+            Provider.of<PremiumService>(context, listen: false).isPremium;
+        if (premium) {
+          prefs.setPreference(PreferenceKey.colorTheme, deck.id);
+        }
+        prefs.setPreviewDeck(null);
+      });
     }
   }
 
@@ -782,25 +805,39 @@ class _CardRevealPageState extends State<CardRevealPage>
                 const SizedBox(height: 14),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Consumer<PremiumService>(
-                    builder: (context, premium, _) => FilledButton.tonalIcon(
-                      onPressed: () => _showNearby(chosen),
-                      icon: Icon(chosen.goOutCategory!.icon, size: 18),
-                      label: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Find a ${chosen.goOutCategory!.label.toLowerCase()} nearby',
-                          ),
-                          // Honest gating: free users see the lock
-                          // before they tap, matching the deck picker.
-                          if (!premium.isPremium) ...[
-                            const SizedBox(width: 6),
-                            const Icon(Icons.lock, size: 14),
+                  child: Consumer2<PremiumService, PreferencesModel>(
+                    builder: (context, premium, prefs, _) {
+                      final remaining =
+                          SuggestionConstants.nearbyFreeLookupCount -
+                              prefs.nearbyFreeLookupsUsed;
+                      return FilledButton.tonalIcon(
+                        onPressed: () => _showNearby(chosen),
+                        icon: Icon(chosen.goOutCategory!.icon, size: 18),
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Find a ${chosen.goOutCategory!.label.toLowerCase()} nearby',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            // Honest gating: free users see their
+                            // remaining metered lookups, then the lock.
+                            if (!premium.isPremium) ...[
+                              const SizedBox(width: 6),
+                              if (remaining > 0)
+                                Text(
+                                  '· $remaining free',
+                                  style: const TextStyle(fontSize: 12),
+                                )
+                              else
+                                const Icon(Icons.lock, size: 14),
+                            ],
                           ],
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -871,19 +908,30 @@ class _CardRevealPageState extends State<CardRevealPage>
     );
   }
 
-  /// Premium-gated entry point for the Nearby sheet. Free users get
-  /// the paywall — and continue straight into the sheet if they
-  /// upgrade mid-flow. Premium users get the sheet, or a prompt to
-  /// enable location if their toggle is off.
+  /// Premium-gated entry point for the Nearby sheet — with a metered
+  /// free allowance: the first few lookups work for everyone, so the
+  /// paywall lands on users who have *seen* real places around them.
+  /// Free users past the allowance get the paywall and continue
+  /// straight into the sheet if they upgrade mid-flow. Premium users
+  /// get the sheet, or a prompt to enable location if off.
   Future<void> _showNearby(Suggestion chosen) async {
     final category = chosen.goOutCategory;
     if (category == null) return; // defensive — UI shouldn't allow this
 
-    if (!await ensurePremium(context, featureName: 'Nearby places')) {
-      return;
-    }
-    if (!mounted) return;
+    final premiumService =
+        Provider.of<PremiumService>(context, listen: false);
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
+    var consumeFreeLookup = false;
+    if (!premiumService.isPremium) {
+      consumeFreeLookup = prefs.nearbyFreeLookupsUsed <
+          SuggestionConstants.nearbyFreeLookupCount;
+      if (!consumeFreeLookup) {
+        if (!await ensurePremium(context, featureName: 'Nearby places')) {
+          return;
+        }
+        if (!mounted) return;
+      }
+    }
     if (!prefs.useLocation) {
       await showDialog<void>(
         context: context,
@@ -902,6 +950,11 @@ class _CardRevealPageState extends State<CardRevealPage>
         ),
       );
       return;
+    }
+    // Only burn a free lookup once the sheet actually opens — a
+    // location-off dialog shouldn't cost one.
+    if (consumeFreeLookup) {
+      unawaited(prefs.incrementNearbyLookups());
     }
     await showNearbySheet(
       context,
@@ -950,23 +1003,33 @@ class _CardRevealPageState extends State<CardRevealPage>
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
-              final premium =
-                  Provider.of<PremiumService>(context, listen: false)
-                      .isPremium;
+            onPressed: () async {
+              final premiumService =
+                  Provider.of<PremiumService>(context, listen: false);
               final input = textController.text.trim();
-              final result = suggestionsRepo.addCustomSuggestionChecked(
+              var result = suggestionsRepo.addCustomSuggestionChecked(
                 input,
-                maxCount: premium
+                maxCount: premiumService.isPremium
                     ? SuggestionConstants.customSuggestionMaxCount
                     : SuggestionConstants.customSuggestionFreeMaxCount,
               );
               Navigator.pop(dialogContext);
               if (!mounted) return;
-              if (result == AddSuggestionResult.capReached && !premium) {
-                // Free deck is full — the paywall explains the upgrade.
-                showPaywall(context, featureName: 'Unlimited custom cards');
-                return;
+              if (result == AddSuggestionResult.capReached &&
+                  !premiumService.isPremium) {
+                // Free deck is full — the paywall explains the
+                // upgrade. If they buy it right here, complete their
+                // original intent: the typed card still gets added.
+                await showPaywall(
+                  context,
+                  featureName: 'Unlimited custom cards',
+                );
+                if (!premiumService.isPremium) return;
+                result = suggestionsRepo.addCustomSuggestionChecked(
+                  input,
+                  maxCount: SuggestionConstants.customSuggestionMaxCount,
+                );
+                if (!mounted) return;
               }
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

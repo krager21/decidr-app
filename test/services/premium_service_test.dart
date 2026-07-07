@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:decidr_app/services/premium_service.dart';
 import 'package:decidr_app/services/purchases_gateway.dart';
@@ -193,6 +194,44 @@ void main() {
 
       gateway.throwOnFetch = true;
       expect(await service.loadPackages(), isEmpty);
+    });
+
+    test('a store push revoking premium marks the lapse', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final gateway = FakeGateway(premium: true);
+      final service = PremiumService(
+        gateway: gateway,
+        storeAvailable: true,
+        prefs: prefs,
+      );
+      await service.init();
+      expect(service.isPremium, isTrue);
+      expect(service.premiumLapsed, isFalse);
+
+      gateway.listener!(false); // expiry / refund pushed by the store
+      expect(service.isPremium, isFalse);
+      expect(service.premiumLapsed, isTrue);
+      expect(prefs.getBool('wasPremium'), isFalse);
+
+      gateway.listener!(true); // renewed
+      expect(service.premiumLapsed, isFalse);
+    });
+
+    test('a lapse while the app was closed is detected at init', () async {
+      SharedPreferences.setMockInitialValues({'wasPremium': true});
+      final prefs = await SharedPreferences.getInstance();
+      final service = PremiumService(
+        gateway: FakeGateway(premium: false), // store says expired
+        storeAvailable: true,
+        prefs: prefs,
+      );
+
+      await service.init();
+
+      expect(service.isPremium, isFalse);
+      expect(service.premiumLapsed, isTrue,
+          reason: 'persisted wasPremium + inactive entitlement = lapse');
     });
 
     test('a failed configure is retried by the next store call', () async {

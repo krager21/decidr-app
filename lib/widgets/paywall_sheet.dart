@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/premium_service.dart';
 import '../services/purchases_gateway.dart';
 import '../utils/constants.dart';
+import '../utils/pricing.dart';
 
 /// The Decidr Premium paywall, shown as a modal bottom sheet from any
 /// gated feature. Replaces the Phase-3 "coming soon" dialog.
@@ -225,7 +226,7 @@ class _PaywallSheetState extends State<_PaywallSheet> {
             child: Center(child: CircularProgressIndicator()),
           );
         }
-        final packages = snapshot.data ?? const <PremiumPackage>[];
+        final packages = sortForDisplay(snapshot.data ?? const []);
         if (packages.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -249,12 +250,15 @@ class _PaywallSheetState extends State<_PaywallSheet> {
             ),
           );
         }
-        _selected ??= packages.first;
+        _selected ??= defaultSelection(packages);
+        final monthly = packages
+            .where((p) => p.kind == PackageKind.monthly)
+            .firstOrNull;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
-              for (final p in packages) _buildPackageTile(theme, p),
+              for (final p in packages) _buildPackageTile(theme, p, monthly),
               if (_notice != null) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -278,9 +282,13 @@ class _PaywallSheetState extends State<_PaywallSheet> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Text(
-                        'Unlock Premium — '
-                        '${_selected!.priceString}'
-                        '${_selected!.periodSuffix.isEmpty ? '' : ' ${_selected!.periodSuffix}'}',
+                        _selected!.hasFreeTrial
+                            ? 'Start free trial — then '
+                                '${_selected!.priceString}'
+                                '${_selected!.periodSuffix.isEmpty ? '' : ' ${_selected!.periodSuffix}'}'
+                            : 'Unlock Premium — '
+                                '${_selected!.priceString}'
+                                '${_selected!.periodSuffix.isEmpty ? '' : ' ${_selected!.periodSuffix}'}',
                       ),
               ),
               TextButton(
@@ -294,8 +302,18 @@ class _PaywallSheetState extends State<_PaywallSheet> {
     );
   }
 
-  Widget _buildPackageTile(ThemeData theme, PremiumPackage p) {
+  Widget _buildPackageTile(
+    ThemeData theme,
+    PremiumPackage p,
+    PremiumPackage? monthly,
+  ) {
     final isSelected = _selected?.id == p.id;
+    final perMonth = perMonthEquivalent(p);
+    final savings = monthly == null ? null : savingsVersusMonthly(p, monthly);
+    final subtitleParts = <String>[
+      if (perMonth != null) perMonth,
+      if (p.introOffer != null) p.introOffer!,
+    ];
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
@@ -324,8 +342,51 @@ class _PaywallSheetState extends State<_PaywallSheet> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(p.label, style: theme.textTheme.bodyLarge),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            p.label,
+                            style: theme.textTheme.bodyLarge,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (savings != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'Save $savings%',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (subtitleParts.isNotEmpty)
+                      Text(
+                        subtitleParts.join(' · '),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '${p.priceString}'
                 '${p.periodSuffix.isEmpty ? '' : ' ${p.periodSuffix}'}',

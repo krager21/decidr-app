@@ -45,6 +45,11 @@ class SuggestionConstants {
   /// Saved preference profiles: free-tier cap and Premium ceiling.
   static const int savedProfilesFreeMaxCount = 2;
   static const int savedProfilesMaxCount = 10;
+
+  /// Lifetime number of free Nearby lookups before the paywall.
+  /// Letting free users feel the feature working at their actual
+  /// location converts far better than a locked button.
+  static const int nearbyFreeLookupCount = 3;
 }
 
 /// Constants for UI elements

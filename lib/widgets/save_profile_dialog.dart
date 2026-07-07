@@ -51,23 +51,31 @@ Future<void> showSaveProfileDialog(BuildContext context) {
               context,
               listen: false,
             );
-            final premium = Provider.of<PremiumService>(
+            final premiumService = Provider.of<PremiumService>(
               context,
               listen: false,
-            ).isPremium;
+            );
             final name = textController.text;
-            final result = await prefs.saveCurrentAsProfile(
+            var result = await prefs.saveCurrentAsProfile(
               name,
-              maxCount: premium
+              maxCount: premiumService.isPremium
                   ? SuggestionConstants.savedProfilesMaxCount
                   : SuggestionConstants.savedProfilesFreeMaxCount,
             );
             if (!dialogContext.mounted) return;
             Navigator.pop(dialogContext);
             if (!context.mounted) return;
-            if (result == SaveProfileResult.capReached && !premium) {
-              showPaywall(context, featureName: 'More saved profiles');
-              return;
+            if (result == SaveProfileResult.capReached &&
+                !premiumService.isPremium) {
+              // Show the paywall — and if they upgrade right here,
+              // save the profile they typed instead of losing it.
+              await showPaywall(context, featureName: 'More saved profiles');
+              if (!premiumService.isPremium) return;
+              result = await prefs.saveCurrentAsProfile(
+                name,
+                maxCount: SuggestionConstants.savedProfilesMaxCount,
+              );
+              if (!context.mounted) return;
             }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

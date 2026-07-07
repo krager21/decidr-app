@@ -1,6 +1,10 @@
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
+/// Billing cadence of a [PremiumPackage], ordered for display: short
+/// cadences first, lifetime last (it anchors the price list).
+enum PackageKind { weekly, monthly, twoMonth, threeMonth, sixMonth, annual, lifetime, other }
+
 /// A store package the user can buy, projected into app-owned types so
 /// the rest of the app (PremiumService, paywall UI, tests) never
 /// imports the RevenueCat SDK. [raw] carries the underlying
@@ -20,6 +24,20 @@ class PremiumPackage {
   /// one-time purchases.
   final String periodSuffix;
 
+  /// Cadence, for sorting and per-month price math.
+  final PackageKind kind;
+
+  /// Numeric price in the store currency (pairs with [priceString]).
+  /// Null when unknown (tests, exotic stores).
+  final double? price;
+
+  /// Human description of an introductory offer, e.g.
+  /// "7 days free" or "3 months at $0.99" — null when none.
+  final String? introOffer;
+
+  /// Whether [introOffer] is a free trial (drives the CTA copy).
+  final bool hasFreeTrial;
+
   /// The underlying SDK object; opaque to callers.
   final Object? raw;
 
@@ -28,6 +46,10 @@ class PremiumPackage {
     required this.label,
     required this.priceString,
     required this.periodSuffix,
+    this.kind = PackageKind.other,
+    this.price,
+    this.introOffer,
+    this.hasFreeTrial = false,
     this.raw,
   });
 }
@@ -170,22 +192,45 @@ class RevenueCatGateway implements PurchasesGateway {
   }
 
   PremiumPackage _toPremiumPackage(Package p) {
-    final (label, suffix) = switch (p.packageType) {
-      PackageType.monthly => ('Monthly', '/ month'),
-      PackageType.annual => ('Annual', '/ year'),
-      PackageType.lifetime => ('Lifetime', ''),
-      PackageType.weekly => ('Weekly', '/ week'),
-      PackageType.sixMonth => ('6 months', '/ 6 months'),
-      PackageType.threeMonth => ('3 months', '/ 3 months'),
-      PackageType.twoMonth => ('2 months', '/ 2 months'),
-      _ => (p.storeProduct.title, ''),
+    final (label, suffix, kind) = switch (p.packageType) {
+      PackageType.monthly => ('Monthly', '/ month', PackageKind.monthly),
+      PackageType.annual => ('Annual', '/ year', PackageKind.annual),
+      PackageType.lifetime => ('Lifetime', '', PackageKind.lifetime),
+      PackageType.weekly => ('Weekly', '/ week', PackageKind.weekly),
+      PackageType.sixMonth => ('6 months', '/ 6 months', PackageKind.sixMonth),
+      PackageType.threeMonth =>
+        ('3 months', '/ 3 months', PackageKind.threeMonth),
+      PackageType.twoMonth => ('2 months', '/ 2 months', PackageKind.twoMonth),
+      _ => (p.storeProduct.title, '', PackageKind.other),
     };
+    final intro = p.storeProduct.introductoryPrice;
     return PremiumPackage(
       id: p.identifier,
       label: label,
       priceString: p.storeProduct.priceString,
       periodSuffix: suffix,
+      kind: kind,
+      price: p.storeProduct.price,
+      introOffer: intro == null ? null : _describeIntro(intro),
+      hasFreeTrial: intro != null && intro.price == 0,
       raw: p,
     );
+  }
+
+  /// "7 days free", "1 month free", "3 months at $0.99" — the store's
+  /// intro offer in one human line.
+  String _describeIntro(IntroductoryPrice intro) {
+    final unit = switch (intro.periodUnit) {
+      PeriodUnit.day => 'day',
+      PeriodUnit.week => 'week',
+      PeriodUnit.month => 'month',
+      PeriodUnit.year => 'year',
+      _ => 'period',
+    };
+    final n = intro.periodNumberOfUnits * intro.cycles;
+    final span = n == 1 ? '1 $unit' : '$n ${unit}s';
+    return intro.price == 0
+        ? '$span free'
+        : '$span at ${intro.priceString}';
   }
 }

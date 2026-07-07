@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'purchases_gateway.dart';
 
@@ -65,7 +66,18 @@ class PremiumService extends ChangeNotifier {
   final PurchasesGateway _gateway;
   final bool _storeAvailable;
 
+  /// For remembering entitlement across launches so a lapse (expiry,
+  /// refund) can be detected and reacted to. Optional — without it,
+  /// lapse detection only works within a session.
+  final SharedPreferences? _prefs;
+
   bool _storePremium = false;
+
+  /// True after the entitlement transitions from active to inactive
+  /// (expiry, refund, cross-device cancellation) — including across
+  /// launches via the persisted `wasPremium` flag. Cleared when the
+  /// user is premium again. UI uses this for win-back surfaces.
+  bool premiumLapsed = false;
 
   /// Set only once [PurchasesGateway.configure] has succeeded — a
   /// failed configure must stay retryable, or the paywall's "Try
@@ -76,8 +88,10 @@ class PremiumService extends ChangeNotifier {
   PremiumService({
     PurchasesGateway? gateway,
     bool? storeAvailable,
+    SharedPreferences? prefs,
   })  : _gateway = gateway ?? RevenueCatGateway(entitlementId: entitlementId),
-        _storeAvailable = storeAvailable ?? storeConfigured;
+        _storeAvailable = storeAvailable ?? storeConfigured,
+        _prefs = prefs;
 
   /// Whether premium features are unlocked right now.
   bool get isPremium => overrideActive || _storePremium;
@@ -171,7 +185,24 @@ class PremiumService extends ChangeNotifier {
   }
 
   void _onEntitlementChanged(bool isPremium) {
-    if (_storePremium == isPremium) return;
+    // Lapse detection: compare against the persisted last-known state
+    // so an expiry that happened while the app was closed still
+    // registers on the next launch.
+    final wasPremium =
+        _storePremium || (_prefs?.getBool('wasPremium') ?? false);
+    if (isPremium) {
+      premiumLapsed = false;
+    } else if (wasPremium) {
+      premiumLapsed = true;
+    }
+    _prefs?.setBool('wasPremium', isPremium);
+
+    if (_storePremium == isPremium) {
+      // State unchanged in-memory, but lapse may have just been
+      // detected from the persisted flag — still notify in that case.
+      if (premiumLapsed && wasPremium) notifyListeners();
+      return;
+    }
     _storePremium = isPremium;
     notifyListeners();
   }

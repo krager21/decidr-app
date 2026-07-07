@@ -166,6 +166,31 @@ class PreferencesModel extends ChangeNotifier {
   /// callers via [saveCurrentAsProfile]'s `maxCount` (free vs Premium).
   List<PreferenceProfile> savedProfiles = [];
 
+  /// Lifetime count of free-tier Nearby lookups consumed. Compared
+  /// against `SuggestionConstants.nearbyFreeLookupCount` by the gate.
+  int nearbyFreeLookupsUsed = 0;
+
+  /// Session-only deck override for the premium "try it for one deal"
+  /// flow. Never persisted — cleared after the trial deal settles.
+  String? previewDeckId;
+
+  /// The deck the cards should actually render with right now.
+  String get effectiveDeckId => previewDeckId ?? colorTheme;
+
+  /// Apply or clear the try-on deck. In-memory only.
+  void setPreviewDeck(String? deckId) {
+    if (previewDeckId == deckId) return;
+    previewDeckId = deckId;
+    notifyListeners();
+  }
+
+  /// Consume one free Nearby lookup. Persists and notifies.
+  Future<void> incrementNearbyLookups() async {
+    nearbyFreeLookupsUsed++;
+    notifyListeners();
+    await _prefs.setInt('nearbyFreeLookupsUsed', nearbyFreeLookupsUsed);
+  }
+
   /// List of suggestion **ids** marked as favorites by the user.
   ///
   /// Post-Phase-3, values are stable [Suggestion] ids (catalog slugs
@@ -237,6 +262,7 @@ class PreferencesModel extends ChangeNotifier {
         _prefs.getBool('interestsPromptDismissed') ?? false;
     favoriteActivities = _prefs.getStringList('favoriteActivities') ?? [];
     savedProfiles = _decodeProfiles(_prefs.getString('savedProfiles'));
+    nearbyFreeLookupsUsed = _prefs.getInt('nearbyFreeLookupsUsed') ?? 0;
     notifyListeners();
   }
 

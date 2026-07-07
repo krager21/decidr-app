@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dynamic_color/dynamic_color.dart';
+import 'data/deck_themes.dart';
 import 'models/preferences_model.dart';
 import 'models/suggestions_repository.dart';
 import 'models/activity_history_model.dart';
@@ -80,8 +81,19 @@ Future<void> _bootstrap() async {
 
   // Premium entitlements (RevenueCat). init() is a no-op when no store
   // API key is baked into the build; failures leave the free tier.
-  final premiumService = PremiumService();
+  final premiumService = PremiumService(prefs: prefs);
   unawaited(premiumService.init());
+
+  // When Premium lapses (expiry/refund — possibly while the app was
+  // closed), premium-gated cosmetics revert: a lapsed user keeping a
+  // premium deck forever removes the reason to come back.
+  premiumService.addListener(() {
+    if (premiumService.premiumLapsed &&
+        !premiumService.isPremium &&
+        themeById(preferencesModel.colorTheme).isPremium) {
+      preferencesModel.setPreference(PreferenceKey.colorTheme, 'default');
+    }
+  });
 
   runApp(
     MultiProvider(

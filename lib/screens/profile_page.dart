@@ -340,7 +340,11 @@ class ProfilePage extends StatelessWidget {
   Widget _buildProfilesCard(BuildContext context) {
     final theme = Theme.of(context);
     final preferencesModel = Provider.of<PreferencesModel>(context);
+    final premium = Provider.of<PremiumService>(context).isPremium;
     final profiles = preferencesModel.savedProfiles;
+    final profileCap = premium
+        ? SuggestionConstants.savedProfilesMaxCount
+        : SuggestionConstants.savedProfilesFreeMaxCount;
 
     return Card(
       child: Column(
@@ -351,6 +355,12 @@ class ProfilePage extends StatelessWidget {
               color: theme.colorScheme.primary,
             ),
             title: const Text('Save current answers as profile'),
+            // Visible meter so the free cap is anticipated, not a
+            // surprise paywall at the moment of saving.
+            subtitle: Text(
+              '${profiles.length} of $profileCap profiles'
+              '${premium ? '' : ' (free plan)'}',
+            ),
             onTap: () => showSaveProfileDialog(context),
           ),
           if (profiles.isEmpty) ...[
@@ -419,8 +429,12 @@ class ProfilePage extends StatelessWidget {
   Widget _buildCustomSuggestionsCard(BuildContext context) {
     final theme = Theme.of(context);
     final suggestionsRepo = Provider.of<SuggestionsRepository>(context);
+    final premium = Provider.of<PremiumService>(context).isPremium;
     final customs = suggestionsRepo.customSuggestions;
-    
+    final cardCap = premium
+        ? SuggestionConstants.customSuggestionMaxCount
+        : SuggestionConstants.customSuggestionFreeMaxCount;
+
     return Card(
       child: Column(
         children: [
@@ -428,6 +442,12 @@ class ProfilePage extends StatelessWidget {
           ListTile(
             leading: Icon(Icons.add_circle, color: theme.colorScheme.primary),
             title: const Text('Add Custom Suggestion'),
+            // Visible meter so the free cap is anticipated, not a
+            // surprise paywall at the moment of adding.
+            subtitle: Text(
+              '${customs.length} of $cardCap cards'
+              '${premium ? '' : ' (free plan)'}',
+            ),
             onTap: () {
               _showAddCustomSuggestionDialog(context);
             },
@@ -518,13 +538,13 @@ class ProfilePage extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
-              final premium =
-                  Provider.of<PremiumService>(context, listen: false)
-                      .isPremium;
-              final result = suggestionsRepo.addCustomSuggestionChecked(
-                textController.text,
-                maxCount: premium
+            onPressed: () async {
+              final premiumService =
+                  Provider.of<PremiumService>(context, listen: false);
+              final input = textController.text;
+              var result = suggestionsRepo.addCustomSuggestionChecked(
+                input,
+                maxCount: premiumService.isPremium
                     ? SuggestionConstants.customSuggestionMaxCount
                     : SuggestionConstants.customSuggestionFreeMaxCount,
               );
@@ -532,10 +552,31 @@ class ProfilePage extends StatelessWidget {
                 Navigator.pop(dialogContext);
                 return;
               }
-              if (result == AddSuggestionResult.capReached && !premium) {
-                // Free deck is full — the paywall explains the upgrade.
+              if (result == AddSuggestionResult.capReached &&
+                  !premiumService.isPremium) {
+                // Free deck is full — show the paywall, and if they
+                // upgrade right here, finish what they came to do.
                 Navigator.pop(dialogContext);
-                showPaywall(context, featureName: 'Unlimited custom cards');
+                await showPaywall(
+                  context,
+                  featureName: 'Unlimited custom cards',
+                );
+                if (!premiumService.isPremium) return;
+                result = suggestionsRepo.addCustomSuggestionChecked(
+                  input,
+                  maxCount: SuggestionConstants.customSuggestionMaxCount,
+                );
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      result == AddSuggestionResult.added
+                          ? 'Added "${input.trim()}" to your deck.'
+                          : 'Couldn’t add "${input.trim()}".',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
                 return;
               }
               ScaffoldMessenger.of(context).showSnackBar(

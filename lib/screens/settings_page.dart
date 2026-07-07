@@ -113,7 +113,7 @@ class SettingsPage extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(width: 12),
               itemBuilder: (context, i) {
                 final deck = deckThemes[i];
-                final isSelected = prefs.colorTheme == deck.id;
+                final isSelected = prefs.effectiveDeckId == deck.id;
                 return _buildDeckPreview(
                   context,
                   theme,
@@ -224,19 +224,68 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  /// Apply [deck] if it's free or the user is premium; otherwise
-  /// route through the paywall — and apply the deck anyway if the
-  /// user upgrades mid-flow, completing their original intent.
+  /// Apply [deck] if it's free or the user is premium. Free users
+  /// tapping a premium deck get a choice: try it for one deal (a
+  /// session-only preview — feeling the deck during the reveal sells
+  /// it better than a locked thumbnail) or go straight to the paywall.
+  /// Upgrading mid-flow applies the deck, completing the intent.
   Future<void> _selectDeck(BuildContext context, DeckTheme deck) async {
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
-    if (deck.isPremium &&
-        !await ensurePremium(
+    final premium = Provider.of<PremiumService>(context, listen: false);
+
+    if (!deck.isPremium || premium.isPremium) {
+      prefs.setPreviewDeck(null);
+      prefs.setPreference(PreferenceKey.colorTheme, deck.id);
+      return;
+    }
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text('The "${deck.name}" deck'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogContext, 'try'),
+            child: const ListTile(
+              leading: Icon(Icons.visibility_outlined),
+              title: Text('Try it for one deal'),
+              subtitle: Text('See it on real cards, on the house'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogContext, 'unlock'),
+            child: const ListTile(
+              leading: Icon(Icons.auto_awesome),
+              title: Text('Unlock with Premium'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+
+    switch (choice) {
+      case 'try':
+        prefs.setPreviewDeck(deck.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '"${deck.name}" applied for your next deal — enjoy!',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      case 'unlock':
+        if (await ensurePremium(
           context,
           featureName: 'The "${deck.name}" deck',
         )) {
-      return;
+          if (!context.mounted) return;
+          prefs.setPreference(PreferenceKey.colorTheme, deck.id);
+        }
+      default:
+        break; // dismissed
     }
-    prefs.setPreference(PreferenceKey.colorTheme, deck.id);
   }
 
   /// Premium status + purchase entry points. The paywall itself
@@ -280,12 +329,21 @@ class SettingsPage extends StatelessWidget {
         ] else ...[
           ListTile(
             leading: Icon(
-              Icons.auto_awesome,
+              premium.premiumLapsed
+                  ? Icons.replay_circle_filled_outlined
+                  : Icons.auto_awesome,
               color: theme.colorScheme.primary,
             ),
-            title: const Text('Upgrade to Premium'),
-            subtitle: const Text(
-              'Themed decks, Nearby places, unlimited custom cards',
+            title: Text(
+              premium.premiumLapsed
+                  ? 'Renew Premium'
+                  : 'Upgrade to Premium',
+            ),
+            subtitle: Text(
+              premium.premiumLapsed
+                  ? 'Your Premium lapsed — themed decks and Nearby '
+                      'are waiting for you'
+                  : 'Themed decks, Nearby places, unlimited custom cards',
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => showPaywall(context),
