@@ -1109,8 +1109,10 @@ class _CardRevealPageState extends State<CardRevealPage>
                 ],
               ),
               const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              // Wrap, not Row: on narrow phone widths the two buttons
+              // overflow a Row by a few pixels.
+              Wrap(
+                alignment: WrapAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () {

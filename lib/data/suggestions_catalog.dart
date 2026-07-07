@@ -2245,8 +2245,14 @@ const List<Suggestion> _curatedSuggestions = [
     energyLevel: 2.5,
     durationMinutes: 120,
     weather: WeatherTolerance.any,
-    tags: ['culture'],
-    interests: [Interests.culture, Interests.learning, Interests.art],
+    tags: ['culture', 'out'],
+    // exploration folded in from the merged 'wander-a-museum' entry.
+    interests: [
+      Interests.culture,
+      Interests.learning,
+      Interests.art,
+      Interests.exploration,
+    ],
     goOutCategory: PlaceCategory.museum,
   ),
   Suggestion(
@@ -2359,8 +2365,13 @@ const List<Suggestion> _curatedSuggestions = [
     energyLevel: 2.5,
     durationMinutes: 90,
     weather: WeatherTolerance.drySpellsOnly,
-    tags: ['walking', 'free'],
-    interests: [Interests.exploration, Interests.walking],
+    tags: ['walking', 'free', 'out'],
+    // nature folded in from the merged 'walk-to-a-viewpoint' entry.
+    interests: [
+      Interests.exploration,
+      Interests.walking,
+      Interests.nature,
+    ],
     goOutCategory: PlaceCategory.viewpoint,
   ),
   Suggestion(
@@ -4075,22 +4086,9 @@ const List<Suggestion> _curatedSuggestions = [
     interests: [Interests.nature, Interests.walking, Interests.exploration],
     goOutCategory: PlaceCategory.park,
   ),
-  Suggestion(
-    id: 'walk-to-a-viewpoint',
-    title: 'Walk to a viewpoint',
-    description:
-        'Pick the nearest hilltop, lookout, or overlook. Get there on foot. Stay until you\'re ready to head back.',
-    iconName: 'landscape',
-    activityType: ActivityType.outdoor,
-    moods: [Mood.relaxed, Mood.creative],
-    social: [SocialContext.solo, SocialContext.partner],
-    energyLevel: 3.5,
-    durationMinutes: 90,
-    weather: WeatherTolerance.drySpellsOnly,
-    tags: ['out', 'physical', 'nature'],
-    interests: [Interests.nature, Interests.walking, Interests.photography],
-    goOutCategory: PlaceCategory.viewpoint,
-  ),
+  // Note: the Phase-3 'walk-to-a-viewpoint' entry was merged into
+  // 'find-city-viewpoint' — near-identical pool coverage meant both
+  // could land in one 3-card hand.
   Suggestion(
     id: 'catch-a-movie-at-the-cinema',
     title: 'Catch whatever\'s playing at the cinema',
@@ -4106,29 +4104,9 @@ const List<Suggestion> _curatedSuggestions = [
     interests: [Interests.culture, Interests.exploration],
     goOutCategory: PlaceCategory.cinema,
   ),
-  Suggestion(
-    id: 'wander-a-museum',
-    title: 'Wander a museum',
-    description:
-        'No checklist. Walk until something catches your eye, then linger.',
-    iconName: 'museum',
-    activityType: ActivityType.hybrid,
-    moods: [Mood.relaxed, Mood.creative, Mood.productive],
-    social: [
-      SocialContext.solo,
-      SocialContext.partner,
-      SocialContext.smallGroup
-    ],
-    energyLevel: 2.5,
-    durationMinutes: 120,
-    tags: ['out', 'culture'],
-    interests: [
-      Interests.culture,
-      Interests.learning,
-      Interests.exploration,
-    ],
-    goOutCategory: PlaceCategory.museum,
-  ),
+  // Note: the Phase-3 'wander-a-museum' entry was merged into
+  // 'visit-museum' — identical pool coverage meant both could land in
+  // one 3-card hand.
   Suggestion(
     id: 'wander-a-gallery',
     title: 'Wander an art gallery',
