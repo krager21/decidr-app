@@ -34,7 +34,14 @@ class ChallengePage extends StatelessWidget {
       count: 3,
       shuffleSeed: payload.seed,
     );
-    final theirs = repo.resolveById(payload.chosenId);
+    // Prefer the recipient's own catalog entry; a custom card (or a
+    // since-removed id) falls back to the title carried in the link
+    // instead of showing a raw 'custom-1a2b3c4d' id.
+    var theirs = repo.resolveById(payload.chosenId);
+    if (theirs.title == payload.chosenId &&
+        payload.chosenTitle.isNotEmpty) {
+      theirs = theirs.copyWith(title: payload.chosenTitle);
+    }
     final yours = hand.length > 1 ? hand[1] : hand.firstOrNull;
 
     return Scaffold(

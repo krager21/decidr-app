@@ -94,19 +94,43 @@ class _CatalogBrowserPageState extends State<CatalogBrowserPage> {
       itemCount: sections.length,
       itemBuilder: (context, i) {
         final section = sections[i];
-        final items = bySection[section]!;
-        return ExpansionTile(
-          title: Text(
-            section == 'Everything else'
-                ? section
-                : section[0].toUpperCase() + section.substring(1),
-          ),
-          subtitle: Text('${items.length} cards'),
-          children: [
-            for (final s in items) _CardTile(suggestion: s),
-          ],
+        return _LazySection(
+          title: section == 'Everything else'
+              ? section
+              : section[0].toUpperCase() + section.substring(1),
+          items: bySection[section]!,
         );
       },
+    );
+  }
+}
+
+/// ExpansionTile whose children are only constructed once expanded —
+/// eagerly inflating ~590 tiles across every section made the page
+/// build do all that work up front.
+class _LazySection extends StatefulWidget {
+  final String title;
+  final List<Suggestion> items;
+
+  const _LazySection({required this.title, required this.items});
+
+  @override
+  State<_LazySection> createState() => _LazySectionState();
+}
+
+class _LazySectionState extends State<_LazySection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      title: Text(widget.title),
+      subtitle: Text('${widget.items.length} cards'),
+      onExpansionChanged: (open) => setState(() => _expanded = open),
+      children: [
+        if (_expanded)
+          for (final s in widget.items) _CardTile(suggestion: s),
+      ],
     );
   }
 }

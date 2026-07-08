@@ -78,6 +78,9 @@ enum RestoreOutcome {
   /// Store reachable, but no prior purchase on this account.
   noPurchases,
 
+  /// User backed out of the store sheet — no feedback needed.
+  cancelled,
+
   /// Store unreachable or errored; try again later.
   failed,
 }
@@ -106,8 +109,9 @@ abstract class PurchasesGateway {
 
   Future<PurchaseOutcome> purchase(PremiumPackage package);
 
-  /// Restore previous purchases; returns the resulting premium state.
-  Future<bool> restore();
+  /// Restore previous purchases; returns the resulting premium state,
+  /// or null when the user cancelled the store sheet.
+  Future<bool?> restore();
 
   /// Store-provided subscription management URL, if any.
   Future<String?> fetchManagementUrl();
@@ -170,11 +174,17 @@ class RevenueCatGateway implements PurchasesGateway {
   }
 
   @override
-  Future<bool> restore() async {
+  Future<bool?> restore() async {
     try {
       final info = await Purchases.restorePurchases();
       return _hasEntitlement(info);
     } on PlatformException catch (e) {
+      // A user backing out of the store sheet is not an error — don't
+      // set a message and don't let it read as a store failure.
+      final code = PurchasesErrorHelper.getErrorCode(e);
+      if (code == PurchasesErrorCode.purchaseCancelledError) {
+        return null;
+      }
       lastErrorMessage =
           e.message ?? 'Couldn’t reach the store. Please try again.';
       rethrow;

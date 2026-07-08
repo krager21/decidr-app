@@ -434,6 +434,8 @@ class _PaywallSheetState extends State<_PaywallSheet> {
     switch (outcome) {
       case RestoreOutcome.restored:
         Navigator.of(context).pop();
+      case RestoreOutcome.cancelled:
+        setState(() => _busy = false); // backed out — no notice
       case RestoreOutcome.noPurchases:
         setState(() {
           _busy = false;

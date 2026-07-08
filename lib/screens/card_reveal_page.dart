@@ -153,6 +153,14 @@ class _CardRevealPageState extends State<CardRevealPage>
   final List<Timer?> _flipTimers = [null, null, null];
   Timer? _settleTimer;
 
+  /// Delayed "keep the deck" offer after a try-on deal settles.
+  Timer? _previewOfferTimer;
+
+  /// True while the "Did it!" celebration is playing — blocks repeat
+  /// taps (duplicate history records) and re-deals (which would fight
+  /// the pending reset).
+  bool _completing = false;
+
   /// The chosen suggestion is always [_slotSuggestions[1]] (the middle
   /// card) once we're in [_RevealStage.settled].
   Suggestion? get _chosen =>
@@ -197,6 +205,8 @@ class _CardRevealPageState extends State<CardRevealPage>
     }
     _settleTimer?.cancel();
     _settleTimer = null;
+    _previewOfferTimer?.cancel();
+    _previewOfferTimer = null;
   }
 
   /// Build the candidate pool for a fresh deal. Returns null if the
@@ -274,6 +284,7 @@ class _CardRevealPageState extends State<CardRevealPage>
     // _runDeal returns once the flip timers are scheduled, so also
     // block on stage for the timer-driven tail of the sequence.
     if (_dealInFlight ||
+        _completing ||
         _stage == _RevealStage.considering ||
         _stage == _RevealStage.dealing) {
       return;
@@ -400,18 +411,30 @@ class _CardRevealPageState extends State<CardRevealPage>
     final previewId = prefs.previewDeckId;
     if (previewId != null) {
       final deck = themeById(previewId);
-      Timer(const Duration(seconds: 2), () async {
-        if (!mounted || prefs.previewDeckId != previewId) return;
+      _previewOfferTimer?.cancel();
+      _previewOfferTimer = Timer(const Duration(seconds: 2), () async {
+        if (!mounted ||
+            _stage != _RevealStage.settled ||
+            prefs.previewDeckId != previewId) {
+          return;
+        }
+        final premiumService = Provider.of<PremiumService>(
+          context,
+          listen: false,
+        );
+        if (premiumService.isPremium) {
+          // Became premium mid-preview (another paywall) — nothing to
+          // sell; just keep the deck they were enjoying.
+          prefs.setPreference(PreferenceKey.colorTheme, deck.id);
+          prefs.setPreviewDeck(null);
+          return;
+        }
         await showPaywall(
           context,
           featureName: 'Keeping the "${deck.name}" deck',
         );
         if (!mounted) return;
-        final premium = Provider.of<PremiumService>(
-          context,
-          listen: false,
-        ).isPremium;
-        if (premium) {
+        if (premiumService.isPremium) {
           prefs.setPreference(PreferenceKey.colorTheme, deck.id);
         }
         prefs.setPreviewDeck(null);
@@ -435,12 +458,24 @@ class _CardRevealPageState extends State<CardRevealPage>
 
   Future<void> _markCompleted() async {
     final chosen = _chosen;
-    if (chosen == null) return;
+    if (chosen == null || _completing) return;
+    _completing = true;
     Provider.of<ActivityHistoryModel>(
       context,
       listen: false,
     ).recordActivity(chosen.id);
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
+    // Completing the card also resolves any pending tonight follow-up
+    // for it — cancel the notification so it doesn't fire afterwards.
+    if (prefs.pendingReminderId == chosen.id) {
+      prefs.setPendingReminder(null);
+      unawaited(
+        Provider.of<ReminderService>(
+          context,
+          listen: false,
+        ).cancelTonightReminder(),
+      );
+    }
     if (prefs.enableHaptics) {
       HapticFeedback.mediumImpact();
     }
@@ -453,9 +488,13 @@ class _CardRevealPageState extends State<CardRevealPage>
     );
     // A celebration beat before the reset — the emotional peak of the
     // whole loop shouldn't end in an instant snap-away.
-    await _celebrateController.forward(from: 0);
-    if (!mounted) return;
-    _resetToIdle();
+    try {
+      await _celebrateController.forward(from: 0);
+      if (!mounted) return;
+      _resetToIdle();
+    } finally {
+      _completing = false;
+    }
   }
 
   void _showNotThisOptions() {
@@ -649,7 +688,8 @@ class _CardRevealPageState extends State<CardRevealPage>
     return Stack(
       alignment: Alignment.center,
       children: [
-        if (_stage == _RevealStage.idle) _buildIdleDeckStack(),
+        if (_stage == _RevealStage.idle && !_dealInFlight)
+          _buildIdleDeckStack(),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: List.generate(3, _buildSlot),
@@ -843,7 +883,13 @@ class _CardRevealPageState extends State<CardRevealPage>
                     alignment: WrapAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: () => prefs.setPendingReminder(null),
+                        onPressed: () {
+                          prefs.setPendingReminder(null);
+                          Provider.of<ReminderService>(
+                            context,
+                            listen: false,
+                          ).cancelTonightReminder();
+                        },
                         child: const Text('Not this time'),
                       ),
                       TextButton.icon(
@@ -853,6 +899,10 @@ class _CardRevealPageState extends State<CardRevealPage>
                             listen: false,
                           ).recordActivity(pendingId);
                           prefs.setPendingReminder(null);
+                          Provider.of<ReminderService>(
+                            context,
+                            listen: false,
+                          ).cancelTonightReminder();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
@@ -1169,6 +1219,7 @@ class _CardRevealPageState extends State<CardRevealPage>
         weirdnessTolerance: prefs.weirdnessTolerance,
         seed: math.Random().nextInt(1 << 31),
         chosenId: chosen.id,
+        chosenTitle: chosen.title,
       );
     }
     await shareSuggestionCard(

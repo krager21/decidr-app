@@ -157,6 +157,15 @@ class ReminderService {
     }
   }
 
+  /// Cancel a pending tonight follow-up — the user resolved it in-app
+  /// (or completed the card directly), so the nudge must not fire.
+  Future<void> cancelTonightReminder() async {
+    if (!_initialized) return;
+    try {
+      await _plugin.cancel(id: _tonightId);
+    } catch (_) {}
+  }
+
   /// Re-arm the lapse-rescue notification ~6 days out. Called on every
   /// launch, so it only ever fires for a user who stopped opening the
   /// app. [hookTitle] personalizes the copy (e.g. a favorite's title).

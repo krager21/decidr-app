@@ -35,11 +35,19 @@ String encodeCustomDeck(List<Suggestion> customs) {
 /// individual malformed entries are skipped rather than failing the
 /// whole import.
 List<PortableCard>? decodeCustomDeck(String input) {
-  final compact = input.trim().replaceAll(RegExp(r'\s'), '');
-  if (!compact.startsWith(_prefix)) return null;
+  // Chat apps wrap pasted text, and people paste the whole shared
+  // message (prose included) — locate the payload anywhere and stop
+  // at the first character outside the base64url alphabet.
+  final compact = input.replaceAll(RegExp(r'\s'), '');
+  final start = compact.indexOf(_prefix);
+  if (start < 0) return null;
+  var payload = compact.substring(start + _prefix.length);
+  final junk = RegExp(r'[^A-Za-z0-9_=-]').firstMatch(payload);
+  if (junk != null) payload = payload.substring(0, junk.start);
+  if (payload.isEmpty) return null;
   try {
     final decoded = jsonDecode(
-      utf8.decode(base64Url.decode(compact.substring(_prefix.length))),
+      utf8.decode(base64Url.decode(payload)),
     );
     if (decoded is! List) return null;
     final cards = <PortableCard>[];

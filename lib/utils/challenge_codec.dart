@@ -20,6 +20,10 @@ class ChallengePayload {
   /// The sender's chosen suggestion id — shown as "they drew X".
   final String chosenId;
 
+  /// Display title for [chosenId] — needed when the sender's pick is
+  /// a custom card the recipient's catalog can't resolve.
+  final String chosenTitle;
+
   const ChallengePayload({
     required this.activityType,
     required this.mood,
@@ -28,6 +32,7 @@ class ChallengePayload {
     required this.weirdnessTolerance,
     required this.seed,
     required this.chosenId,
+    this.chosenTitle = '',
   });
 
   String encode() {
@@ -40,6 +45,7 @@ class ChallengePayload {
       'w': weirdnessTolerance,
       's': seed,
       'c': chosenId,
+      'ct': chosenTitle,
     });
     return base64UrlEncode(utf8.encode(json));
   }
@@ -61,6 +67,7 @@ class ChallengePayload {
             (json['w'] as num).toDouble().clamp(0.0, 1.0),
         seed: json['s'] as int,
         chosenId: json['c'] as String,
+        chosenTitle: json['ct'] is String ? json['ct'] as String : '',
       );
     } catch (_) {
       return null;

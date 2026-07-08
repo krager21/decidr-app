@@ -55,8 +55,11 @@ class FakeGateway implements PurchasesGateway {
     return purchaseOutcome;
   }
 
+  bool cancelRestore = false;
+
   @override
-  Future<bool> restore() async {
+  Future<bool?> restore() async {
+    if (cancelRestore) return null;
     if (throwOnRestore) {
       lastErrorMessage = 'store unreachable';
       throw Exception('store unreachable');
@@ -183,6 +186,12 @@ void main() {
       expect(await service3.restore(), RestoreOutcome.failed,
           reason: 'a store outage must not read as "no purchases"');
       expect(service3.lastErrorMessage, isNotNull);
+
+      final gateway4 = FakeGateway()..cancelRestore = true;
+      final service4 =
+          PremiumService(gateway: gateway4, storeAvailable: true);
+      expect(await service4.restore(), RestoreOutcome.cancelled,
+          reason: 'backing out of the store sheet is not an error');
     });
 
     test('loadPackages returns store packages and [] on error', () async {

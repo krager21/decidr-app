@@ -278,6 +278,9 @@ class SettingsPage extends StatelessWidget {
           featureName: 'The "${deck.name}" deck',
         )) {
           if (!context.mounted) return;
+          // Clear any try-on preview first — otherwise it keeps
+          // overriding the deck that was just purchased and applied.
+          prefs.setPreviewDeck(null);
           prefs.setPreference(PreferenceKey.colorTheme, deck.id);
         }
       default:
@@ -452,12 +455,13 @@ class SettingsPage extends StatelessWidget {
   ) async {
     final outcome = await premium.restore();
     if (!context.mounted) return;
+    if (outcome == RestoreOutcome.cancelled) return; // user backed out
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(switch (outcome) {
           RestoreOutcome.restored => 'Premium restored — welcome back!',
           RestoreOutcome.noPurchases => 'No previous purchases found.',
-          RestoreOutcome.failed =>
+          _ =>
             premium.lastErrorMessage ??
                 'Couldn’t reach the store — please try again.',
         }),

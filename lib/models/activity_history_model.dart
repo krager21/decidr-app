@@ -93,14 +93,17 @@ class ActivityHistoryModel extends ChangeNotifier {
         .toSet();
     final today = DateTime.now();
     var cursor = DateTime(today.year, today.month, today.day);
+    // Calendar arithmetic, not Duration: subtracting fixed 24h lands
+    // on 23:00 across DST transitions and breaks the day-set lookups.
+    DateTime prevDay(DateTime d) => DateTime(d.year, d.month, d.day - 1);
     if (!days.contains(cursor)) {
-      cursor = cursor.subtract(const Duration(days: 1));
+      cursor = prevDay(cursor);
       if (!days.contains(cursor)) return 0;
     }
     var streak = 0;
     while (days.contains(cursor)) {
       streak++;
-      cursor = cursor.subtract(const Duration(days: 1));
+      cursor = prevDay(cursor);
     }
     return streak;
   }

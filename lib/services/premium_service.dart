@@ -166,6 +166,7 @@ class PremiumService extends ChangeNotifier {
     if (!_configured) return RestoreOutcome.failed;
     try {
       final restored = await _gateway.restore();
+      if (restored == null) return RestoreOutcome.cancelled;
       _onEntitlementChanged(restored);
       return restored ? RestoreOutcome.restored : RestoreOutcome.noPurchases;
     } catch (e) {
