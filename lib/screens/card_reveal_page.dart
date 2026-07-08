@@ -17,6 +17,7 @@ import '../services/reminder_service.dart';
 import '../services/weather_service.dart';
 import '../utils/challenge_codec.dart';
 import '../utils/constants.dart';
+import '../utils/dealer_voice.dart';
 import '../widgets/decision_card.dart';
 import '../widgets/share_card.dart';
 import '../widgets/paywall_sheet.dart';
@@ -122,6 +123,9 @@ class _CardRevealPageState extends State<CardRevealPage>
   /// Drives the medallion fade-in during the considering stage (0..1).
   late final AnimationController _considerController;
 
+  /// Drives the "Did it!" celebration burst on the chosen card.
+  late final AnimationController _celebrateController;
+
   // ─── state ────────────────────────────────────────────────────
   _RevealStage _stage = _RevealStage.idle;
 
@@ -164,6 +168,10 @@ class _CardRevealPageState extends State<CardRevealPage>
       vsync: this,
       duration: _consideringRevealDuration,
     );
+    _celebrateController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
     // Trigger a rebuild after first frame so the empty/idle distinction
     // is correct based on currently-loaded preferences.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -177,6 +185,7 @@ class _CardRevealPageState extends State<CardRevealPage>
     _cancelAllTimers();
     _dealInController.dispose();
     _considerController.dispose();
+    _celebrateController.dispose();
     super.dispose();
   }
 
@@ -410,18 +419,26 @@ class _CardRevealPageState extends State<CardRevealPage>
     });
   }
 
-  void _markCompleted() {
+  Future<void> _markCompleted() async {
     final chosen = _chosen;
     if (chosen == null) return;
     Provider.of<ActivityHistoryModel>(context, listen: false)
         .recordActivity(chosen.id);
+    final prefs = Provider.of<PreferencesModel>(context, listen: false);
+    if (prefs.enableHaptics) {
+      HapticFeedback.mediumImpact();
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Added "${chosen.title}" to history'),
+        content: Text(DealerVoice.completed(chosen.title)),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
       ),
     );
+    // A celebration beat before the reset — the emotional peak of the
+    // whole loop shouldn't end in an instant snap-away.
+    await _celebrateController.forward(from: 0);
+    if (!mounted) return;
     _resetToIdle();
   }
 
@@ -604,10 +621,23 @@ class _CardRevealPageState extends State<CardRevealPage>
     );
   }
 
+  /// Face-down stack shown before the first deal — the space above
+  /// the CTA used to be empty, and the user's chosen deck (or a
+  /// premium try-on) is now visible before dealing.
+  Widget _buildIdleDeckStack() {
+    return const Center(child: _IdleDeckStack());
+  }
+
   Widget _buildCardsRow() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: List.generate(3, _buildSlot),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        if (_stage == _RevealStage.idle) _buildIdleDeckStack(),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(3, _buildSlot),
+        ),
+      ],
     );
   }
 
@@ -640,10 +670,15 @@ class _CardRevealPageState extends State<CardRevealPage>
             transform: Matrix4.identity()
               ..translateByDouble(dx, dy, 0, 1)
               ..rotateZ(rotation),
-            child: DecisionCard(
-              state: _stateForSlot(slot),
-              suggestion: _slotSuggestions[slot],
-            ),
+            child: slot == 1
+                ? _withCelebration(DecisionCard(
+                    state: _stateForSlot(slot),
+                    suggestion: _slotSuggestions[slot],
+                  ))
+                : DecisionCard(
+                    state: _stateForSlot(slot),
+                    suggestion: _slotSuggestions[slot],
+                  ),
           ),
         );
       },
@@ -681,6 +716,42 @@ class _CardRevealPageState extends State<CardRevealPage>
     }
   }
 
+  /// Wrap the chosen card with the "Did it!" celebration: a spring
+  /// scale-pop plus a radial sparkle burst driven by
+  /// [_celebrateController].
+  Widget _withCelebration(Widget card) {
+    return AnimatedBuilder(
+      animation: _celebrateController,
+      builder: (context, child) {
+        final t = _celebrateController.value;
+        // Quick pop out and settle back: peaks ~15% at t≈0.2.
+        final pop = t == 0
+            ? 0.0
+            : Curves.easeOutBack.transform((t * 2).clamp(0.0, 1.0)) *
+                (1 - Curves.easeIn.transform(t));
+        return Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Transform.scale(scale: 1 + 0.12 * pop, child: child),
+            if (t > 0 && t < 1)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _CelebrationBurstPainter(
+                      progress: t,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+      child: card,
+    );
+  }
+
   Widget _buildBottomSection(ThemeData theme) {
     switch (_stage) {
       case _RevealStage.idle:
@@ -703,7 +774,7 @@ class _CardRevealPageState extends State<CardRevealPage>
       children: [
         _buildPendingReminderPrompt(theme),
         Text(
-          'We\'ll deal three cards. The middle one is yours.',
+          DealerVoice.idleHint,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -826,15 +897,30 @@ class _CardRevealPageState extends State<CardRevealPage>
                     builder: (context, prefs, _) {
                       final isFav = prefs.isFavorite(chosen.id);
                       return IconButton(
-                        onPressed: () => prefs.toggleFavorite(chosen.id),
+                        onPressed: () {
+                          if (!isFav && prefs.enableHaptics) {
+                            HapticFeedback.lightImpact();
+                          }
+                          prefs.toggleFavorite(chosen.id);
+                        },
                         tooltip: isFav
                             ? 'Remove from favorites'
                             : 'Add to favorites',
-                        icon: Icon(
-                          isFav ? Icons.favorite : Icons.favorite_border,
-                          color: isFav
-                              ? Colors.red
-                              : theme.colorScheme.onSurfaceVariant,
+                        // Spring-pop when the heart fills so the tap
+                        // visibly registered.
+                        icon: TweenAnimationBuilder<double>(
+                          key: ValueKey(isFav),
+                          tween: Tween(begin: isFav ? 1.5 : 1.0, end: 1.0),
+                          duration: const Duration(milliseconds: 400),
+                          curve: Curves.elasticOut,
+                          builder: (context, scale, child) =>
+                              Transform.scale(scale: scale, child: child),
+                          child: Icon(
+                            isFav ? Icons.favorite : Icons.favorite_border,
+                            color: isFav
+                                ? Colors.red
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       );
                     },
@@ -1227,7 +1313,7 @@ class _CardRevealPageState extends State<CardRevealPage>
           ),
           const SizedBox(height: 4),
           Text(
-            'Try adjusting your filters and dealing again.',
+            DealerVoice.emptyPool,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -1713,6 +1799,100 @@ class _ContextChip extends StatelessWidget {
 }
 
 /// Small chip for showing a piece of metadata about the chosen suggestion.
+/// The breathing face-down stack shown on the idle stage: three
+/// slightly-fanned deck-themed card backs with a gentle 1.0→1.02
+/// scale loop, inviting the deal. Its pulse controller lives only
+/// while the widget is in the tree (idle stage), so nothing ticks
+/// once cards are dealt.
+class _IdleDeckStack extends StatefulWidget {
+  const _IdleDeckStack();
+
+  @override
+  State<_IdleDeckStack> createState() => _IdleDeckStackState();
+}
+
+class _IdleDeckStackState extends State<_IdleDeckStack>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _breath;
+
+  @override
+  void initState() {
+    super.initState();
+    _breath = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _breath,
+      builder: (context, child) {
+        final scale =
+            1.0 + 0.02 * Curves.easeInOut.transform(_breath.value);
+        return Transform.scale(scale: scale, child: child);
+      },
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          for (final (angle, dx) in [(-0.10, -14.0), (0.10, 14.0), (0.0, 0.0)])
+            Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..translateByDouble(dx, 0, 0, 1)
+                ..rotateZ(angle),
+              child: const DecisionCard(
+                state: DecisionCardState.faceDown,
+                suggestion: null,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Radial sparkle burst for the "Did it!" beat: particles fly out
+/// from the card center and fade.
+class _CelebrationBurstPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  const _CelebrationBurstPainter({
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final maxRadius = size.shortestSide * 1.1;
+    final eased = Curves.easeOut.transform(progress);
+    final opacity = (1 - progress).clamp(0.0, 1.0);
+    final paint = Paint()..color = color.withValues(alpha: 0.8 * opacity);
+
+    for (var i = 0; i < 14; i++) {
+      final angle = i * 2 * math.pi / 14 + (i.isEven ? 0.15 : -0.1);
+      final distance = maxRadius * (0.35 + 0.65 * eased) *
+          (i % 3 == 0 ? 1.0 : 0.75);
+      final pos = center + Offset.fromDirection(angle, distance);
+      final particleSize = (i % 3 == 0 ? 4.5 : 2.8) * (1 - 0.4 * eased);
+      canvas.drawCircle(pos, particleSize, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CelebrationBurstPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
 class _MetaChip extends StatelessWidget {
   final IconData icon;
   final String label;

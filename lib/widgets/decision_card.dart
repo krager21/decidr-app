@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../data/deck_themes.dart';
 import '../models/preferences_model.dart';
 import '../models/suggestion.dart';
+import 'deck_motif_painter.dart';
 
 /// Visual state of a [DecisionCard] in the tarot-reveal flow.
 enum DecisionCardState {
@@ -158,10 +159,21 @@ class _DecisionCardState extends State<DecisionCard>
           ),
         ],
       ),
-      child: Center(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
         child: Stack(
           alignment: Alignment.center,
           children: [
+            // Deck-specific back art — what makes a premium deck more
+            // than a recolor.
+            Positioned.fill(
+              child: CustomPaint(
+                painter: DeckMotifPainter(
+                  motif: deck.motif,
+                  accent: deck.accent,
+                ),
+              ),
+            ),
             // Outer decorative ring.
             Container(
               width: 64,

@@ -13,6 +13,10 @@ import 'package:flutter/material.dart';
 /// to the first entry when an unknown id is loaded, so the field is
 /// safe across schema changes.
 ///
+/// Background motif painted on the card back — what makes a premium
+/// deck more than a recolor of the same two rings.
+enum DeckMotif { classic, moonAndStars, leaves, sunRays, geometric }
+
 /// Named `DeckTheme` (not `CardTheme`) to avoid clashing with
 /// Flutter's `CardTheme` from the Material library.
 class DeckTheme {
@@ -34,6 +38,9 @@ class DeckTheme {
   /// dialog with a real purchase flow.
   final bool isPremium;
 
+  /// Back-face art painted behind the emblem.
+  final DeckMotif motif;
+
   const DeckTheme({
     required this.id,
     required this.name,
@@ -41,6 +48,7 @@ class DeckTheme {
     required this.back2,
     required this.accent,
     required this.isPremium,
+    this.motif = DeckMotif.classic,
   });
 }
 
@@ -66,6 +74,7 @@ const List<DeckTheme> deckThemes = [
     back2: Color(0xFF6B21A8), // violet-800
     accent: Color(0xFFF9C846), // saturated gold
     isPremium: true,
+    motif: DeckMotif.moonAndStars,
   ),
   // Forest — deep green with antiqued copper accent.
   DeckTheme(
@@ -75,6 +84,7 @@ const List<DeckTheme> deckThemes = [
     back2: Color(0xFF14532D), // green-900
     accent: Color(0xFFC8956D), // antique copper
     isPremium: true,
+    motif: DeckMotif.leaves,
   ),
   // Sunset — warm pink-to-orange with cream highlight.
   DeckTheme(
@@ -84,6 +94,7 @@ const List<DeckTheme> deckThemes = [
     back2: Color(0xFFBE185D), // pink-700
     accent: Color(0xFFFEF3C7), // cream
     isPremium: true,
+    motif: DeckMotif.sunRays,
   ),
   // Monochrome — slate grays with silver accent.
   DeckTheme(
@@ -93,6 +104,7 @@ const List<DeckTheme> deckThemes = [
     back2: Color(0xFF334155), // slate-700
     accent: Color(0xFFCBD5E1), // slate-300 silver
     isPremium: true,
+    motif: DeckMotif.geometric,
   ),
 ];
 
