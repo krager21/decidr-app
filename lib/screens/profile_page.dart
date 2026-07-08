@@ -87,7 +87,6 @@ class ProfilePage extends StatelessWidget {
   Widget _buildProfileCard(BuildContext context) {
     final theme = Theme.of(context);
     final historyModel = Provider.of<ActivityHistoryModel>(context);
-    final recentActivities = historyModel.getRecentActivities();
     
     return Card(
       child: Padding(
@@ -141,10 +140,17 @@ class ProfilePage extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildStatItem(
-                  context, 
-                  'Activities', 
-                  '${recentActivities.length}',
+                  context,
+                  'Done',
+                  // Every completion counts — repeats included.
+                  '${historyModel.totalCompletions}',
                   Icons.check_circle_outline,
+                ),
+                _buildStatItem(
+                  context,
+                  'Streak',
+                  '${historyModel.currentStreak}d',
+                  Icons.local_fire_department_outlined,
                 ),
                 _buildStatItem(
                   context, 

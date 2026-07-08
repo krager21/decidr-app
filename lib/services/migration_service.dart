@@ -33,7 +33,7 @@ import '../models/suggestion.dart';
 /// a stable `custom-<hash>` id (with collision-suffixing).
 class MigrationService {
   static const String _versionKey = 'prefsSchemaVersion';
-  static const int _targetVersion = 2;
+  static const int _targetVersion = 3;
 
   /// Run any outstanding migrations. Call once at app startup before
   /// any model loads from [SharedPreferences].
@@ -52,6 +52,9 @@ class MigrationService {
     try {
       if (current < 2) {
         await _migrateV1ToV2(prefs);
+      }
+      if (current < 3) {
+        await _migrateV2ToV3(prefs);
       }
       await prefs.setInt(_versionKey, _targetVersion);
       debugPrint('Migration complete; schema is now v$_targetVersion');
@@ -184,6 +187,35 @@ class MigrationService {
           .toList();
       await prefs.setStringList('activity_dislikes', newDislikes);
       debugPrint('Migrated ${newDislikes.length} dislikes');
+    }
+  }
+
+  /// v2 → v3: `activityHistory` changes shape from a latest-per-id
+  /// map (`{id: ISO8601}`) to an append-only event list
+  /// (`[{id, at}, ...]`) so repeat completions accumulate — the basis
+  /// for streaks and per-day stats.
+  ///
+  /// Re-entrant: an already-list payload (partial previous run)
+  /// passes through untouched; malformed payloads are left for
+  /// [ActivityHistoryModel]'s tolerant loader.
+  static Future<void> _migrateV2ToV3(SharedPreferences prefs) async {
+    final raw = prefs.getString('activityHistory');
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return; // already v3 or junk
+      final events = <Map<String, dynamic>>[];
+      decoded.forEach((id, value) {
+        final at = DateTime.tryParse(value.toString());
+        if (at != null) {
+          events.add({'id': id, 'at': at.toIso8601String()});
+        }
+      });
+      events.sort((a, b) => (a['at'] as String).compareTo(b['at'] as String));
+      await prefs.setString('activityHistory', jsonEncode(events));
+      debugPrint('Migrated ${events.length} history entries to v3 events');
+    } on FormatException catch (e) {
+      debugPrint('History JSON malformed during v3 migration: $e');
     }
   }
 

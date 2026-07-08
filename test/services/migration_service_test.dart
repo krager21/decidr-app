@@ -15,13 +15,12 @@ void main() {
 
       await MigrationService.migrateIfNeeded(prefs);
 
-      expect(prefs.getInt('prefsSchemaVersion'), 2);
+      expect(prefs.getInt('prefsSchemaVersion'), 3);
     });
 
     test('skips migration when already at target version', () async {
-      // Simulate a device that's already on v2.
       SharedPreferences.setMockInitialValues({
-        'prefsSchemaVersion': 2,
+        'prefsSchemaVersion': 3,
         'favoriteActivities': ['some-id-already-migrated'],
       });
       final prefs = await SharedPreferences.getInstance();
@@ -85,10 +84,12 @@ void main() {
 
       await MigrationService.migrateIfNeeded(prefs);
 
+      // After the full 1→3 run, history is the v3 event-list shape.
       final raw = prefs.getString('activityHistory')!;
-      final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      expect(decoded.keys, contains(entry.id));
-      expect(decoded[entry.id], ts);
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      final event = decoded.single as Map<String, dynamic>;
+      expect(event['id'], entry.id);
+      expect(event['at'], ts);
     });
 
     test('migrates feedback rejections and dislikes', () async {
@@ -136,8 +137,8 @@ void main() {
       // Same id should appear everywhere.
       expect(prefs.getStringList('favoriteActivities')!.first, customId);
       final hist = jsonDecode(prefs.getString('activityHistory')!)
-          as Map<String, dynamic>;
-      expect(hist.keys.first, customId);
+          as List<dynamic>;
+      expect((hist.single as Map<String, dynamic>)['id'], customId);
       expect(prefs.getStringList('activity_dislikes')!.first, customId);
     });
 
@@ -148,11 +149,11 @@ void main() {
       expect(prefs.getInt('prefsSchemaVersion'), isNull);
 
       await MigrationService.migrateIfNeeded(prefs);
-      expect(prefs.getInt('prefsSchemaVersion'), 2);
+      expect(prefs.getInt('prefsSchemaVersion'), 3);
 
       // Calling again is a no-op.
       await MigrationService.migrateIfNeeded(prefs);
-      expect(prefs.getInt('prefsSchemaVersion'), 2);
+      expect(prefs.getInt('prefsSchemaVersion'), 3);
     });
   });
 
@@ -187,7 +188,7 @@ void main() {
       await MigrationService.migrateIfNeeded(prefs);
 
       // Migration completed rather than throwing a TypeError.
-      expect(prefs.getInt('prefsSchemaVersion'), 2);
+      expect(prefs.getInt('prefsSchemaVersion'), 3);
       // The custom title resolved to the id from the existing v2 JSON,
       // not to a freshly synthesized one.
       final favorites = prefs.getStringList('favoriteActivities')!;
@@ -214,9 +215,48 @@ void main() {
           [entry.id, 'custom-deadbeef'],
           reason: 'ids must not be rewritten to custom-<hash>');
       final hist = jsonDecode(prefs.getString('activityHistory')!)
-          as Map<String, dynamic>;
-      expect(hist.keys.single, entry.id);
+          as List<dynamic>;
+      expect((hist.single as Map<String, dynamic>)['id'], entry.id);
       expect(prefs.getStringList('activity_dislikes'), [entry.id]);
+    });
+  });
+
+  group('MigrationService v2 → v3 (history events)', () {
+    test('converts the latest-per-id map to a sorted event list', () async {
+      SharedPreferences.setMockInitialValues({
+        'prefsSchemaVersion': 2,
+        'activityHistory': jsonEncode({
+          'newer-id': '2026-06-02T10:00:00.000',
+          'older-id': '2026-06-01T10:00:00.000',
+        }),
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await MigrationService.migrateIfNeeded(prefs);
+
+      expect(prefs.getInt('prefsSchemaVersion'), 3);
+      final events = jsonDecode(prefs.getString('activityHistory')!)
+          as List<dynamic>;
+      expect(events, hasLength(2));
+      expect((events.first as Map<String, dynamic>)['id'], 'older-id',
+          reason: 'events sorted ascending by timestamp');
+      expect((events.last as Map<String, dynamic>)['id'], 'newer-id');
+    });
+
+    test('re-run with an already-v3 list payload is a no-op', () async {
+      final v3 = jsonEncode([
+        {'id': 'a', 'at': '2026-06-01T10:00:00.000'},
+      ]);
+      SharedPreferences.setMockInitialValues({
+        'prefsSchemaVersion': 2,
+        'activityHistory': v3,
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await MigrationService.migrateIfNeeded(prefs);
+
+      expect(prefs.getString('activityHistory'), v3);
+      expect(prefs.getInt('prefsSchemaVersion'), 3);
     });
   });
 }

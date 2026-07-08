@@ -15,45 +15,45 @@ class HistoryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final historyModel = Provider.of<ActivityHistoryModel>(context);
-    final recentActivities = historyModel.getRecentActivities(limit: 20);
-    
+    // Events, not latest-per-id: doing the same activity twice shows
+    // both completions.
+    final recentEvents = historyModel.getRecentEvents(limit: 30);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Activity History'),
       ),
-      body: recentActivities.isEmpty
+      body: recentEvents.isEmpty
           ? _buildEmptyHistoryView(context)
           : ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: recentActivities.length,
+              itemCount: recentEvents.length,
               itemBuilder: (context, index) {
-                // Activity item
-                final activity = recentActivities[index];
-                return _buildHistoryItem(context, activity);
+                return _buildHistoryItem(context, recentEvents[index]);
               },
             ),
     );
   }
-  
+
   // Build a history item.
   //
-  // `activity.key` is a Suggestion.id (post-Phase-3); resolve to a
+  // `event.id` is a Suggestion.id (post-Phase-3); resolve to a
   // renderable Suggestion for the displayed title and icon.
   Widget _buildHistoryItem(
     BuildContext context,
-    MapEntry<String, DateTime> activity,
+    ActivityEvent event,
   ) {
     final theme = Theme.of(context);
     final suggestionsRepo = Provider.of<SuggestionsRepository>(context);
-    final suggestion = suggestionsRepo.resolveById(activity.key);
+    final suggestion = suggestionsRepo.resolveById(event.id);
 
     // Format the date
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final activityDate = DateTime(
-      activity.value.year,
-      activity.value.month,
-      activity.value.day,
+      event.at.year,
+      event.at.month,
+      event.at.day,
     );
 
     String dateText;
@@ -62,13 +62,12 @@ class HistoryPage extends StatelessWidget {
     } else if (activityDate == today.subtract(const Duration(days: 1))) {
       dateText = 'Yesterday';
     } else {
-      dateText =
-          '${activity.value.day}/${activity.value.month}/${activity.value.year}';
+      dateText = '${event.at.day}/${event.at.month}/${event.at.year}';
     }
 
     // Format the time
     final timeText =
-        '${activity.value.hour.toString().padLeft(2, '0')}:${activity.value.minute.toString().padLeft(2, '0')}';
+        '${event.at.hour.toString().padLeft(2, '0')}:${event.at.minute.toString().padLeft(2, '0')}';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),

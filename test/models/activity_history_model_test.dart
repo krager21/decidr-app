@@ -19,8 +19,8 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 600));
 
       final stored = jsonDecode(prefs.getString('activityHistory')!)
-          as Map<String, dynamic>;
-      expect(stored.keys, ['read-a-book']);
+          as List<dynamic>;
+      expect((stored.single as Map<String, dynamic>)['id'], 'read-a-book');
     });
 
     test('rapid records coalesce into one save with all entries', () async {
@@ -34,8 +34,11 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 600));
 
       final stored = jsonDecode(prefs.getString('activityHistory')!)
-          as Map<String, dynamic>;
-      expect(stored.keys.toSet(), {'a', 'b', 'c'});
+          as List<dynamic>;
+      expect(
+        stored.map((e) => (e as Map<String, dynamic>)['id']).toSet(),
+        {'a', 'b', 'c'},
+      );
     });
 
     test('save and load use the same key (round-trip)', () async {
@@ -103,7 +106,76 @@ void main() {
 
       expect(model.getRecentActivities().first.key, 'a');
       expect(model.activityHistory, hasLength(2),
-          reason: 'record updates the timestamp, not a duplicate entry');
+          reason: 'latest-per-id view collapses repeats');
+      expect(model.events, hasLength(3),
+          reason: 'the event log keeps every completion');
+    });
+  });
+
+  group('events, streaks, and per-day stats', () {
+    Future<ActivityHistoryModel> modelWithEventDays(List<int> daysAgo) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final model = ActivityHistoryModel(prefs);
+      final now = DateTime.now();
+      for (final d in daysAgo) {
+        model.events.add(
+          ActivityEvent('act-$d', now.subtract(Duration(days: d))),
+        );
+      }
+      return model;
+    }
+
+    test('repeat completions accumulate as events', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final model = ActivityHistoryModel(prefs);
+
+      model.recordActivity('cook');
+      model.recordActivity('cook');
+
+      expect(model.totalCompletions, 2);
+      expect(model.getRecentEvents(), hasLength(2),
+          reason: 'History shows both completions');
+      expect(model.activityHistory, hasLength(1),
+          reason: 'compat view stays latest-per-id');
+    });
+
+    test('v2 map payload loads via the tolerant loader', () async {
+      SharedPreferences.setMockInitialValues({
+        'activityHistory': jsonEncode({
+          'a': '2026-06-01T10:00:00.000',
+          'b': '2026-06-02T10:00:00.000',
+        }),
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final model = ActivityHistoryModel(prefs);
+      expect(model.events, hasLength(2));
+      expect(model.events.first.id, 'a', reason: 'sorted ascending');
+    });
+
+    test('currentStreak counts consecutive days back from today', () async {
+      final model = await modelWithEventDays([0, 1, 2, 5]);
+      expect(model.currentStreak, 3);
+      expect(model.completedToday, isTrue);
+    });
+
+    test('streak survives an unfinished today', () async {
+      final model = await modelWithEventDays([1, 2]);
+      expect(model.currentStreak, 2,
+          reason: 'today is not over — yesterday anchors the streak');
+      expect(model.completedToday, isFalse);
+    });
+
+    test('a gap breaks the streak', () async {
+      final model = await modelWithEventDays([2, 3]);
+      expect(model.currentStreak, 0);
+    });
+
+    test('empty history means zero streak', () async {
+      final model = await modelWithEventDays([]);
+      expect(model.currentStreak, 0);
+      expect(model.totalCompletions, 0);
     });
   });
 }
