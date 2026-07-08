@@ -366,6 +366,10 @@ class SuggestionsRepository extends ChangeNotifier {
     /// empty results once the pool is exhausted).
     Set<String> excludeIds = const {},
     int count = SuggestionConstants.defaultSuggestionsCount,
+
+    /// Fixed shuffle seed for deterministic hands — the "same hand"
+    /// challenge links depend on it. Null keeps the deal random.
+    int? shuffleSeed,
   }) {
     // Pre-compute the user-interest set once for Stage 4's Jaccard
     // multiplier. An empty set short-circuits the scoring term to 1.0.
@@ -481,7 +485,7 @@ class SuggestionsRepository extends ChangeNotifier {
     rest.sort((a, b) => b.score.compareTo(a.score));
 
     final topBand = rest.take(count * 2).map((s) => s.suggestion).toList()
-      ..shuffle(Random());
+      ..shuffle(Random(shuffleSeed));
 
     final result = <Suggestion>[...favorites, ...topBand];
     final seen = <String>{};

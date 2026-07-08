@@ -15,6 +15,7 @@ import 'services/places_service.dart';
 import 'services/premium_service.dart';
 import 'services/reminder_service.dart';
 import 'services/weather_service.dart';
+import 'screens/challenge_page.dart';
 import 'screens/splash_screen.dart';
 import 'screens/settings_page.dart';
 import 'screens/questionnaire_page.dart';
@@ -175,6 +176,20 @@ class DecidrApp extends StatelessWidget {
             '/settings': (context) => const SettingsPage(),
           },
           
+          // /deal deep link: PWA shortcuts and challenge links land
+          // here (web URL fragment routing). With a valid challenge
+          // parameter it opens the challenge page; otherwise it jumps
+          // straight to the app without the splash/welcome gauntlet.
+          onGenerateRoute: (settings) {
+            final name = settings.name;
+            if (name == null) return null;
+            final uri = Uri.tryParse(name);
+            if (uri == null || uri.path != '/deal') return null;
+            return MaterialPageRoute(
+              builder: (context) => dealRouteTarget(context, uri),
+            );
+          },
+
           // Handle unknown routes
           onUnknownRoute: (settings) {
             return MaterialPageRoute(

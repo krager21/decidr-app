@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/preferences_model.dart';
 import '../models/suggestion.dart';
 import '../models/suggestions_repository.dart';
+import '../utils/deck_codec.dart';
 import '../models/activity_history_model.dart';
 import '../models/preference_profile.dart';
 import '../services/premium_service.dart';
@@ -335,6 +337,24 @@ class ProfilePage extends StatelessWidget {
     return Card(
       child: Column(
         children: [
+          // "Things I want to do" — the wish list finally gets an
+          // outlet beyond scoring.
+          ListTile(
+            leading: Icon(Icons.ios_share, color: theme.colorScheme.primary),
+            title: const Text('Share this list'),
+            subtitle: const Text('Send your want-to-dos to someone'),
+            onTap: () {
+              final titles = favorites
+                  .take(5)
+                  .map((id) => suggestionsRepo.resolveById(id).title)
+                  .toList();
+              SharePlus.instance.share(ShareParams(
+                text: 'Things I want to do (from my Decidr deck):\n'
+                    '${titles.map((t) => '• $t').join('\n')}',
+              ));
+            },
+          ),
+          const Divider(height: 1),
           for (int i = 0; i < favorites.length; i++) ...[
             if (i > 0) const Divider(height: 1),
             Builder(builder: (context) {
@@ -487,7 +507,34 @@ class ProfilePage extends StatelessWidget {
               _showAddCustomSuggestionDialog(context);
             },
           ),
-          
+          if (customs.isNotEmpty) ...[
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(Icons.ios_share, color: theme.colorScheme.primary),
+              title: const Text('Share my deck'),
+              subtitle: const Text(
+                'Send your custom cards as pasteable text',
+              ),
+              onTap: () {
+                SharePlus.instance.share(ShareParams(
+                  text: 'My Decidr custom deck (${customs.length} cards) — '
+                      'paste this into Decidr → Profile → Import a deck:\n'
+                      '${encodeCustomDeck(customs)}',
+                ));
+              },
+            ),
+          ],
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(
+              Icons.download_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            title: const Text('Import a deck'),
+            subtitle: const Text('Paste a deck someone shared with you'),
+            onTap: () => _showImportDeckDialog(context),
+          ),
+
           if (customs.isEmpty) ...[
             const Divider(height: 1),
             Padding(
@@ -687,6 +734,94 @@ class ProfilePage extends StatelessWidget {
     );
   }
   
+  /// Paste-to-import a shared custom deck. Merges through the checked
+  /// add (dedupe + entitlement cap); a cap hit routes to the paywall
+  /// with everything added so far kept.
+  void _showImportDeckDialog(BuildContext context) {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Import a deck'),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Paste the shared deck text here',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final repo = Provider.of<SuggestionsRepository>(
+                context,
+                listen: false,
+              );
+              final premium = Provider.of<PremiumService>(
+                context,
+                listen: false,
+              ).isPremium;
+              final cards = decodeCustomDeck(textController.text);
+              Navigator.pop(dialogContext);
+              if (!context.mounted) return;
+              if (cards == null || cards.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('That doesn’t look like a Decidr deck.'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+              final cap = premium
+                  ? SuggestionConstants.customSuggestionMaxCount
+                  : SuggestionConstants.customSuggestionFreeMaxCount;
+              var added = 0, skipped = 0, capHit = false;
+              for (final card in cards) {
+                final result = repo.addCustomSuggestionChecked(
+                  card.title,
+                  maxCount: cap,
+                  activityType: card.activityType,
+                  energyLevel: card.energyLevel,
+                  durationMinutes: card.durationMinutes,
+                );
+                if (result == AddSuggestionResult.added) {
+                  added++;
+                } else if (result == AddSuggestionResult.capReached) {
+                  capHit = true;
+                  break;
+                } else {
+                  skipped++; // duplicate/invalid
+                }
+              }
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Imported $added card${added == 1 ? '' : 's'}'
+                    '${skipped > 0 ? ', $skipped already in your deck' : ''}'
+                    '${capHit ? ' — deck full' : ''}.',
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              if (capHit && !premium) {
+                showPaywall(context, featureName: 'Unlimited custom cards');
+              }
+            },
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Show dialog to remove custom suggestion
   void _showRemoveCustomSuggestionDialog(BuildContext context, String suggestion) {
     final suggestionsRepo = Provider.of<SuggestionsRepository>(context, listen: false);

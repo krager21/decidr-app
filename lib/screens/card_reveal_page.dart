@@ -15,8 +15,10 @@ import '../models/weather_model.dart';
 import '../services/premium_service.dart';
 import '../services/reminder_service.dart';
 import '../services/weather_service.dart';
+import '../utils/challenge_codec.dart';
 import '../utils/constants.dart';
 import '../widgets/decision_card.dart';
+import '../widgets/share_card.dart';
 import '../widgets/paywall_sheet.dart';
 import '../widgets/premium_gate.dart';
 import 'interests_picker_page.dart';
@@ -837,6 +839,14 @@ class _CardRevealPageState extends State<CardRevealPage>
                       );
                     },
                   ),
+                  IconButton(
+                    onPressed: () => _shareChosen(chosen),
+                    tooltip: 'Share this card',
+                    icon: Icon(
+                      Icons.ios_share,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ],
               ),
               if (chosen.description.isNotEmpty) ...[
@@ -1038,6 +1048,39 @@ class _CardRevealPageState extends State<CardRevealPage>
       context,
       suggestion: chosen,
       category: category,
+    );
+  }
+
+  /// Share the chosen card as a deck-themed postcard image, with a
+  /// "draw the same hand" challenge link when the deal inputs are
+  /// available (they always are in the settled state).
+  Future<void> _shareChosen(Suggestion chosen) async {
+    final prefs = Provider.of<PreferencesModel>(context, listen: false);
+    ChallengePayload? challenge;
+    final activityType = ActivityType.values
+        .where((e) => e.label == prefs.activityPreference)
+        .firstOrNull;
+    final mood =
+        Mood.values.where((e) => e.label == prefs.mood).firstOrNull;
+    final timeOfDay = TimeOfDayPref.values
+        .where((e) => e.label == prefs.effectiveTimeOfDay)
+        .firstOrNull;
+    if (activityType != null && mood != null && timeOfDay != null) {
+      challenge = ChallengePayload(
+        activityType: activityType,
+        mood: mood,
+        timeOfDay: timeOfDay,
+        energyLevel: prefs.energyLevel,
+        weirdnessTolerance: prefs.weirdnessTolerance,
+        seed: math.Random().nextInt(1 << 31),
+        chosenId: chosen.id,
+      );
+    }
+    await shareSuggestionCard(
+      context,
+      suggestion: chosen,
+      deck: themeById(prefs.effectiveDeckId),
+      challenge: challenge,
     );
   }
 

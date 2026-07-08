@@ -30,5 +30,20 @@
             "type": "image/png",
             "purpose": "maskable"
         }
+    ],
+    "id": "/decidr-app/",
+    "shortcuts": [
+        {
+            "name": "Deal now",
+            "short_name": "Deal",
+            "description": "Skip straight to the cards",
+            "url": "./#/deal",
+            "icons": [
+                {
+                    "src": "icons/Icon-192.png",
+                    "sizes": "192x192"
+                }
+            ]
+        }
     ]
 }
