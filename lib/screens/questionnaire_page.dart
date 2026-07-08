@@ -210,7 +210,9 @@ class _QuestionnaireFormState extends State<QuestionnaireForm> {
           ),
           const SizedBox(height: 6),
           SizedBox(
-            height: 40,
+            // Scales with the user's text size so large accessibility
+            // settings don't clip the chips.
+            height: 40 * MediaQuery.textScalerOf(context).scale(14) / 14,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: model.savedProfiles.length,

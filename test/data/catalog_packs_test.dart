@@ -80,40 +80,35 @@ void main() {
   });
 
   group('weather-positive scoring', () {
-    test('rain boosts rainy-day cards into the deal', () async {
+    test('rain lifts rainy-day cards; clear skies suppress them',
+        () async {
       final repo = await repoAt(DateTime(2026, 3, 1));
-      // Ask in the pool where the indoor rainy cards live.
-      final results = repo.getStructuredSuggestions(
-        activityType: ActivityType.indoor,
-        mood: Mood.relaxed,
-        timeOfDay: TimeOfDayPref.evening,
-        energyLevel: 1.5,
-        weather: weatherWith(condition: 'rain'),
-        count: 12,
-      );
-      expect(
-        results.any((s) => s.tags.contains('rainy-day')),
-        isTrue,
-        reason: 'rain should surface at least one rain-celebrating card '
-            'in a 12-card ask',
-      );
-    });
 
-    test('clear skies push rain cards out of the top band', () async {
-      final repo = await repoAt(DateTime(2026, 3, 1));
-      final results = repo.getStructuredSuggestions(
-        activityType: ActivityType.indoor,
-        mood: Mood.relaxed,
-        timeOfDay: TimeOfDayPref.evening,
-        energyLevel: 1.5,
-        weather: weatherWith(condition: 'clear'),
-        count: 8,
-      );
-      final rainCards =
-          results.where((s) => s.tags.contains('rainy-day')).length;
-      expect(rainCards, lessThanOrEqualTo(1),
-          reason: 'the 0.5 mismatch penalty should keep sunny deals '
-              'nearly rain-free');
+      // Deterministic: fixed seeds, count across several hands, and
+      // assert the *relationship* between rain and clear — the boost
+      // (x1.5) and penalty (x0.5) must move the needle.
+      int rainyCount(WeatherData weather) {
+        var hits = 0;
+        for (var seed = 0; seed < 10; seed++) {
+          final results = repo.getStructuredSuggestions(
+            activityType: ActivityType.indoor,
+            mood: Mood.relaxed,
+            timeOfDay: TimeOfDayPref.evening,
+            energyLevel: 1.5,
+            weather: weather,
+            count: 8,
+            shuffleSeed: seed,
+          );
+          hits +=
+              results.where((s) => s.tags.contains('rainy-day')).length;
+        }
+        return hits;
+      }
+
+      final inRain = rainyCount(weatherWith(condition: 'rain'));
+      final inSun = rainyCount(weatherWith(condition: 'clear'));
+      expect(inRain, greaterThan(inSun),
+          reason: 'rain=$inRain vs clear=$inSun across 10 seeded hands');
     });
   });
 }

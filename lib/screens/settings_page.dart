@@ -20,9 +20,7 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
           _buildThemeSettings(context),
@@ -42,21 +40,18 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
-  
+
   // Build theme settings section
   Widget _buildThemeSettings(BuildContext context) {
     final theme = Theme.of(context);
     final preferencesModel = Provider.of<PreferencesModel>(context);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            'Appearance',
-            style: theme.textTheme.titleLarge,
-          ),
+          child: Text('Appearance', style: theme.textTheme.titleLarge),
         ),
         SwitchListTile(
           title: const Text('Use System Theme'),
@@ -97,16 +92,9 @@ class SettingsPage extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.style,
-                size: 20,
-                color: theme.colorScheme.primary,
-              ),
+              Icon(Icons.style, size: 20, color: theme.colorScheme.primary),
               const SizedBox(width: 8),
-              Text(
-                'Card deck',
-                style: theme.textTheme.titleMedium,
-              ),
+              Text('Card deck', style: theme.textTheme.titleMedium),
             ],
           ),
           const SizedBox(height: 12),
@@ -119,12 +107,7 @@ class SettingsPage extends StatelessWidget {
               itemBuilder: (context, i) {
                 final deck = deckThemes[i];
                 final isSelected = prefs.effectiveDeckId == deck.id;
-                return _buildDeckPreview(
-                  context,
-                  theme,
-                  deck,
-                  isSelected,
-                );
+                return _buildDeckPreview(context, theme, deck, isSelected);
               },
             ),
           ),
@@ -141,89 +124,100 @@ class SettingsPage extends StatelessWidget {
     DeckTheme deck,
     bool isSelected,
   ) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: () => _selectDeck(context, deck),
-      child: SizedBox(
-        width: 84,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 70,
-              height: 110,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [deck.back1, deck.back2],
-                ),
-                border: Border.all(
-                  color: isSelected
-                      ? theme.colorScheme.primary
-                      : deck.accent.withValues(alpha: 0.5),
-                  width: isSelected ? 2.5 : 1,
-                ),
-                boxShadow: [
-                  if (isSelected)
-                    BoxShadow(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    ),
-                ],
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: deck.accent.withValues(alpha: 0.45),
-                        width: 1,
+    // Screen readers only heard the deck name — surface selection,
+    // premium, and locked state too (visually they're border width
+    // and a tiny lock chip).
+    final premium = Provider.of<PremiumService>(
+      context,
+      listen: false,
+    ).isPremium;
+    final locked = deck.isPremium && !premium;
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label:
+          '${deck.name} deck'
+          '${deck.isPremium ? ', premium' : ''}'
+          '${locked ? ', locked' : ''}',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _selectDeck(context, deck),
+        child: SizedBox(
+          width: 84,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 70,
+                height: 110,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [deck.back1, deck.back2],
+                  ),
+                  border: Border.all(
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : deck.accent.withValues(alpha: 0.5),
+                    width: isSelected ? 2.5 : 1,
+                  ),
+                  boxShadow: [
+                    if (isSelected)
+                      BoxShadow(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        spreadRadius: 1,
                       ),
-                    ),
-                  ),
-                  Icon(
-                    Icons.auto_awesome,
-                    size: 16,
-                    color: deck.accent,
-                  ),
-                  if (deck.isPremium)
-                    Positioned(
-                      top: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.black.withValues(alpha: 0.55),
-                        ),
-                        child: const Icon(
-                          Icons.lock,
-                          size: 10,
-                          color: Colors.white,
+                  ],
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: deck.accent.withValues(alpha: 0.45),
+                          width: 1,
                         ),
                       ),
                     ),
-                ],
+                    Icon(Icons.auto_awesome, size: 16, color: deck.accent),
+                    if (deck.isPremium)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.black.withValues(alpha: 0.55),
+                          ),
+                          child: const Icon(
+                            Icons.lock,
+                            size: 10,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              deck.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight:
-                    isSelected ? FontWeight.w600 : FontWeight.w400,
+              const SizedBox(height: 6),
+              Text(
+                deck.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -274,9 +268,7 @@ class SettingsPage extends StatelessWidget {
         prefs.setPreviewDeck(deck.id);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              '"${deck.name}" applied for your next deal — enjoy!',
-            ),
+            content: Text('"${deck.name}" applied for your next deal — enjoy!'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -309,10 +301,7 @@ class SettingsPage extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            'Reminders',
-            style: theme.textTheme.titleLarge,
-          ),
+          child: Text('Reminders', style: theme.textTheme.titleLarge),
         ),
         SwitchListTile(
           title: const Text('Daily deal reminder'),
@@ -381,17 +370,11 @@ class SettingsPage extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            'Decidr Premium',
-            style: theme.textTheme.titleLarge,
-          ),
+          child: Text('Decidr Premium', style: theme.textTheme.titleLarge),
         ),
         if (premium.isPremium) ...[
           ListTile(
-            leading: Icon(
-              Icons.auto_awesome,
-              color: theme.colorScheme.primary,
-            ),
+            leading: Icon(Icons.auto_awesome, color: theme.colorScheme.primary),
             title: const Text('Premium active'),
             subtitle: const Text(
               'Themed decks, Nearby places, unlimited custom cards',
@@ -416,14 +399,12 @@ class SettingsPage extends StatelessWidget {
               color: theme.colorScheme.primary,
             ),
             title: Text(
-              premium.premiumLapsed
-                  ? 'Renew Premium'
-                  : 'Upgrade to Premium',
+              premium.premiumLapsed ? 'Renew Premium' : 'Upgrade to Premium',
             ),
             subtitle: Text(
               premium.premiumLapsed
                   ? 'Your Premium lapsed — themed decks and Nearby '
-                      'are waiting for you'
+                        'are waiting for you'
                   : 'Themed decks, Nearby places, unlimited custom cards',
             ),
             trailing: const Icon(Icons.chevron_right),
@@ -476,8 +457,9 @@ class SettingsPage extends StatelessWidget {
         content: Text(switch (outcome) {
           RestoreOutcome.restored => 'Premium restored — welcome back!',
           RestoreOutcome.noPurchases => 'No previous purchases found.',
-          RestoreOutcome.failed => premium.lastErrorMessage ??
-              'Couldn’t reach the store — please try again.',
+          RestoreOutcome.failed =>
+            premium.lastErrorMessage ??
+                'Couldn’t reach the store — please try again.',
         }),
         behavior: SnackBarBehavior.floating,
       ),
@@ -494,10 +476,7 @@ class SettingsPage extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            'Experience',
-            style: theme.textTheme.titleLarge,
-          ),
+          child: Text('Experience', style: theme.textTheme.titleLarge),
         ),
         SwitchListTile(
           title: const Text('Haptic Feedback'),
@@ -532,10 +511,7 @@ class SettingsPage extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            'Personalization',
-            style: theme.textTheme.titleLarge,
-          ),
+          child: Text('Personalization', style: theme.textTheme.titleLarge),
         ),
         SwitchListTile(
           title: const Text('Weather-aware suggestions'),
@@ -555,9 +531,7 @@ class SettingsPage extends StatelessWidget {
         ),
         SwitchListTile(
           title: const Text('Use my location'),
-          subtitle: const Text(
-            'Required for weather and nearby places',
-          ),
+          subtitle: const Text('Required for weather and nearby places'),
           secondary: const Icon(Icons.my_location),
           value: prefs.useLocation,
           onChanged: (value) {
@@ -589,9 +563,7 @@ class SettingsPage extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const InterestsPickerPage(),
-              ),
+              MaterialPageRoute(builder: (_) => const InterestsPickerPage()),
             );
           },
         ),
@@ -601,10 +573,7 @@ class SettingsPage extends StatelessWidget {
 
   /// Build the subtitle for the weather toggle, reflecting service
   /// state so the user can see why their toggle isn't doing anything.
-  String _weatherSubtitle(
-    PreferencesModel prefs,
-    WeatherService weather,
-  ) {
+  String _weatherSubtitle(PreferencesModel prefs, WeatherService weather) {
     if (!WeatherService.isConfigured) {
       return 'Not configured — set OPENWEATHER_API_KEY at build time';
     }
@@ -648,16 +617,13 @@ class SettingsPage extends StatelessWidget {
   // Build about section
   Widget _buildAboutSettings(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            'About',
-            style: theme.textTheme.titleLarge,
-          ),
+          child: Text('About', style: theme.textTheme.titleLarge),
         ),
         ListTile(
           title: const Text('About Decidr'),
@@ -678,17 +644,21 @@ class SettingsPage extends StatelessWidget {
       ],
     );
   }
-  
-  
+
   // Show reset preferences dialog
   void _showResetPreferencesDialog(BuildContext context) {
-    final preferencesModel = Provider.of<PreferencesModel>(context, listen: false);
-    
+    final preferencesModel = Provider.of<PreferencesModel>(
+      context,
+      listen: false,
+    );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Reset Preferences'),
-        content: const Text('This will clear your activity preferences. Your favorites and history will not be affected. Continue?'),
+        content: const Text(
+          'This will clear your activity preferences. Your favorites and history will not be affected. Continue?',
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -713,7 +683,7 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
-  
+
   // Show about dialog
   void _showAboutDialog(BuildContext context) {
     showAboutDialog(
@@ -734,7 +704,7 @@ class SettingsPage extends StatelessWidget {
       ],
     );
   }
-  
+
   /// Feedback goes out as a real email — Send opens the user's mail
   /// app with their text pre-filled. (The old dialog claimed to send
   /// and silently discarded the text.)
@@ -748,7 +718,9 @@ class SettingsPage extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('We\'d love to hear your thoughts on how to improve Decidr!'),
+            const Text(
+              'We\'d love to hear your thoughts on how to improve Decidr!',
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: textController,
@@ -774,7 +746,8 @@ class SettingsPage extends StatelessWidget {
               final uri = Uri(
                 scheme: 'mailto',
                 path: AppConstants.supportEmail,
-                query: 'subject=${Uri.encodeComponent('Decidr feedback')}'
+                query:
+                    'subject=${Uri.encodeComponent('Decidr feedback')}'
                     '&body=${Uri.encodeComponent(body)}',
               );
               try {

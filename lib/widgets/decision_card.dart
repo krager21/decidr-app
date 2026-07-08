@@ -97,32 +97,52 @@ class _DecisionCardState extends State<DecisionCard>
     final theme = Theme.of(context);
     final isChosen = widget.state == DecisionCardState.chosen;
 
-    return AnimatedScale(
-      scale: isChosen ? 1.08 : 1.0,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutBack,
-      child: AnimatedBuilder(
-        animation: _flipController,
-        builder: (context, _) {
-          final t = _flipController.value;
-          final angle = t * pi; // 0 (back) → pi (front)
-          final showFront = t >= 0.5;
+    // Screen-reader story: without an explicit label the card back is
+    // pure decoration and VoiceOver perceives an empty screen. Cap the
+    // text scale inside the fixed-geometry card so huge accessibility
+    // sizes don't collapse titles to a single ellipsized word — the
+    // full title is always available through semantics regardless.
+    final title = widget.suggestion?.title;
+    final label = switch (widget.state) {
+      DecisionCardState.faceDown => 'Face-down card',
+      DecisionCardState.revealed =>
+        title == null ? 'Revealed card' : 'Also considered: $title',
+      DecisionCardState.chosen =>
+        title == null ? 'Your card' : 'Your card: $title',
+    };
 
-          return Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.001) // perspective
-              ..rotateY(angle),
-            child: showFront
-                ? Transform(
-                    // Counter-rotate so the front isn't mirrored.
-                    alignment: Alignment.center,
-                    transform: Matrix4.identity()..rotateY(pi),
-                    child: _buildFrontFace(theme, isChosen),
-                  )
-                : _buildBackFace(theme),
-          );
-        },
+    return Semantics(
+      label: label,
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.3,
+        child: AnimatedScale(
+          scale: isChosen ? 1.08 : 1.0,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutBack,
+          child: AnimatedBuilder(
+            animation: _flipController,
+            builder: (context, _) {
+              final t = _flipController.value;
+              final angle = t * pi; // 0 (back) → pi (front)
+              final showFront = t >= 0.5;
+
+              return Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.001) // perspective
+                  ..rotateY(angle),
+                child: showFront
+                    ? Transform(
+                        // Counter-rotate so the front isn't mirrored.
+                        alignment: Alignment.center,
+                        transform: Matrix4.identity()..rotateY(pi),
+                        child: _buildFrontFace(theme, isChosen),
+                      )
+                    : _buildBackFace(theme),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -199,11 +219,7 @@ class _DecisionCardState extends State<DecisionCard>
               ),
             ),
             // Sparkle emblem.
-            Icon(
-              Icons.auto_awesome,
-              size: 22,
-              color: deck.accent,
-            ),
+            Icon(Icons.auto_awesome, size: 22, color: deck.accent),
           ],
         ),
       ),
@@ -214,8 +230,9 @@ class _DecisionCardState extends State<DecisionCard>
 
   Widget _buildFrontFace(ThemeData theme, bool isChosen) {
     final s = widget.suggestion;
-    final accent =
-        isChosen ? theme.colorScheme.primary : theme.colorScheme.outlineVariant;
+    final accent = isChosen
+        ? theme.colorScheme.primary
+        : theme.colorScheme.outlineVariant;
     final iconBgColor = isChosen
         ? theme.colorScheme.primary
         : theme.colorScheme.primaryContainer;
@@ -230,10 +247,7 @@ class _DecisionCardState extends State<DecisionCard>
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: accent,
-          width: isChosen ? 2.5 : 1,
-        ),
+        border: Border.all(color: accent, width: isChosen ? 2.5 : 1),
         boxShadow: [
           if (isChosen)
             BoxShadow(
@@ -264,8 +278,9 @@ class _DecisionCardState extends State<DecisionCard>
                 boxShadow: isChosen
                     ? [
                         BoxShadow(
-                          color: theme.colorScheme.primary
-                              .withValues(alpha: 0.25),
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.25,
+                          ),
                           blurRadius: 12,
                           spreadRadius: 1,
                         ),

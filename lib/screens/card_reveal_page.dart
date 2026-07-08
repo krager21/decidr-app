@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -108,14 +109,14 @@ class _CardRevealPageState extends State<CardRevealPage>
   /// Per-slot starting offset and rotation for the deal-in.
   /// Cards arrive from above-and-outside, fanning toward their slots.
   static const _slotStartOffsets = <Offset>[
-    Offset(70, -210),   // slot 0 (left) starts above-right of its slot
-    Offset(0, -240),    // slot 1 (middle) drops straight down
-    Offset(-70, -210),  // slot 2 (right) starts above-left of its slot
+    Offset(70, -210), // slot 0 (left) starts above-right of its slot
+    Offset(0, -240), // slot 1 (middle) drops straight down
+    Offset(-70, -210), // slot 2 (right) starts above-left of its slot
   ];
   static const _slotStartRotations = <double>[
-    0.30,   // slot 0 — tilted right
-    0.0,    // slot 1
-    -0.30,  // slot 2 — tilted left
+    0.30, // slot 0 — tilted right
+    0.0, // slot 1
+    -0.30, // slot 2 — tilted left
   ];
 
   late final AnimationController _dealInController;
@@ -213,8 +214,10 @@ class _CardRevealPageState extends State<CardRevealPage>
     // the fire-and-forget refresh below repopulates it for next deal.
     WeatherData? weather;
     if (prefs.useWeather && prefs.useLocation) {
-      final weatherService =
-          Provider.of<WeatherService>(context, listen: false);
+      final weatherService = Provider.of<WeatherService>(
+        context,
+        listen: false,
+      );
       weather = weatherService.freshWeather;
       if (weather == null &&
           WeatherService.isConfigured &&
@@ -226,15 +229,18 @@ class _CardRevealPageState extends State<CardRevealPage>
 
     if (!prefs.arePreferencesComplete) return null;
 
-    final activityType = ActivityType.values
-        .firstWhere((e) => e.label == prefs.activityPreference);
+    final activityType = ActivityType.values.firstWhere(
+      (e) => e.label == prefs.activityPreference,
+    );
     final mood = Mood.values.firstWhere((e) => e.label == prefs.mood);
-    final timeOfDay = TimeOfDayPref.values
-        .firstWhere((e) => e.label == prefs.effectiveTimeOfDay);
+    final timeOfDay = TimeOfDayPref.values.firstWhere(
+      (e) => e.label == prefs.effectiveTimeOfDay,
+    );
     final socialContext = prefs.socialContext == null
         ? null
-        : SocialContext.values
-            .firstWhere((e) => e.label == prefs.socialContext);
+        : SocialContext.values.firstWhere(
+            (e) => e.label == prefs.socialContext,
+          );
 
     final pool = repo.getStructuredSuggestions(
       activityType: activityType,
@@ -334,12 +340,9 @@ class _CardRevealPageState extends State<CardRevealPage>
 
     // Stage 3: reveal sequence — left → right → middle (chosen).
     // Delays are measured from now (end of breath).
-    _flipTimers[0] =
-        Timer(_firstFlipDelay, () => _revealSlot(0, soft: true));
-    _flipTimers[1] =
-        Timer(_secondFlipDelay, () => _revealSlot(2, soft: true));
-    _flipTimers[2] =
-        Timer(_thirdFlipDelay, () => _revealSlot(1, soft: false));
+    _flipTimers[0] = Timer(_firstFlipDelay, () => _revealSlot(0, soft: true));
+    _flipTimers[1] = Timer(_secondFlipDelay, () => _revealSlot(2, soft: true));
+    _flipTimers[2] = Timer(_thirdFlipDelay, () => _revealSlot(1, soft: false));
     _settleTimer = Timer(_settleDelay, _settle);
   }
 
@@ -370,6 +373,15 @@ class _CardRevealPageState extends State<CardRevealPage>
   void _settle() {
     if (!mounted) return;
     setState(() => _stage = _RevealStage.settled);
+    // The whole reveal is visual — tell screen readers what happened.
+    final settled = _slotSuggestions[1];
+    if (settled != null) {
+      SemanticsService.sendAnnouncement(
+        View.of(context),
+        'Your card: ${settled.title}. ${settled.description}',
+        Directionality.of(context),
+      );
+    }
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
     if (prefs.enableHaptics) {
       HapticFeedback.heavyImpact();
@@ -395,8 +407,10 @@ class _CardRevealPageState extends State<CardRevealPage>
           featureName: 'Keeping the "${deck.name}" deck',
         );
         if (!mounted) return;
-        final premium =
-            Provider.of<PremiumService>(context, listen: false).isPremium;
+        final premium = Provider.of<PremiumService>(
+          context,
+          listen: false,
+        ).isPremium;
         if (premium) {
           prefs.setPreference(PreferenceKey.colorTheme, deck.id);
         }
@@ -422,8 +436,10 @@ class _CardRevealPageState extends State<CardRevealPage>
   Future<void> _markCompleted() async {
     final chosen = _chosen;
     if (chosen == null) return;
-    Provider.of<ActivityHistoryModel>(context, listen: false)
-        .recordActivity(chosen.id);
+    Provider.of<ActivityHistoryModel>(
+      context,
+      listen: false,
+    ).recordActivity(chosen.id);
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
     if (prefs.enableHaptics) {
       HapticFeedback.mediumImpact();
@@ -556,13 +572,16 @@ class _CardRevealPageState extends State<CardRevealPage>
                           return FadeTransition(
                             opacity: animation,
                             child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, 0.15),
-                                end: Offset.zero,
-                              ).animate(CurvedAnimation(
-                                parent: animation,
-                                curve: Curves.easeOutCubic,
-                              )),
+                              position:
+                                  Tween<Offset>(
+                                    begin: const Offset(0, 0.15),
+                                    end: Offset.zero,
+                                  ).animate(
+                                    CurvedAnimation(
+                                      parent: animation,
+                                      curve: Curves.easeOutCubic,
+                                    ),
+                                  ),
                               child: child,
                             ),
                           );
@@ -600,10 +619,7 @@ class _CardRevealPageState extends State<CardRevealPage>
           label: prefs.activityPreference ?? '—',
         ),
         _ContextChip(icon: Icons.mood, label: prefs.mood ?? '—'),
-        _ContextChip(
-          icon: Icons.access_time,
-          label: prefs.effectiveTimeOfDay,
-        ),
+        _ContextChip(icon: Icons.access_time, label: prefs.effectiveTimeOfDay),
         _ContextChip(
           icon: Icons.bolt,
           label: 'Energy ${prefs.energyLevel.toStringAsFixed(1)}',
@@ -611,7 +627,8 @@ class _CardRevealPageState extends State<CardRevealPage>
         if (weather != null)
           _ContextChip(
             icon: _weatherIcon(weather),
-            label: '${_weatherLabel(weather)} · ${weather.temperature.round()}°C',
+            label:
+                '${_weatherLabel(weather)} · ${weather.temperature.round()}°C',
           ),
         if (prefs.socialContext != null)
           _ContextChip(icon: Icons.people, label: prefs.socialContext!),
@@ -671,10 +688,12 @@ class _CardRevealPageState extends State<CardRevealPage>
               ..translateByDouble(dx, dy, 0, 1)
               ..rotateZ(rotation),
             child: slot == 1
-                ? _withCelebration(DecisionCard(
-                    state: _stateForSlot(slot),
-                    suggestion: _slotSuggestions[slot],
-                  ))
+                ? _withCelebration(
+                    DecisionCard(
+                      state: _stateForSlot(slot),
+                      suggestion: _slotSuggestions[slot],
+                    ),
+                  )
                 : DecisionCard(
                     state: _stateForSlot(slot),
                     suggestion: _slotSuggestions[slot],
@@ -728,7 +747,7 @@ class _CardRevealPageState extends State<CardRevealPage>
         final pop = t == 0
             ? 0.0
             : Curves.easeOutBack.transform((t * 2).clamp(0.0, 1.0)) *
-                (1 - Curves.easeIn.transform(t));
+                  (1 - Curves.easeIn.transform(t));
         return Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.center,
@@ -786,8 +805,7 @@ class _CardRevealPageState extends State<CardRevealPage>
           icon: const Icon(Icons.style),
           label: const Text('Deal cards'),
           style: FilledButton.styleFrom(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
           ),
         ),
       ],
@@ -802,8 +820,7 @@ class _CardRevealPageState extends State<CardRevealPage>
       builder: (context, prefs, _) {
         final pendingId = prefs.pendingReminderId;
         if (pendingId == null) return const SizedBox.shrink();
-        final repo =
-            Provider.of<SuggestionsRepository>(context, listen: false);
+        final repo = Provider.of<SuggestionsRepository>(context, listen: false);
         final suggestion = repo.resolveById(pendingId);
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
@@ -937,10 +954,7 @@ class _CardRevealPageState extends State<CardRevealPage>
               ),
               if (chosen.description.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text(
-                  chosen.description,
-                  style: theme.textTheme.bodyMedium,
-                ),
+                Text(chosen.description, style: theme.textTheme.bodyMedium),
               ],
               const SizedBox(height: 12),
               Wrap(
@@ -974,7 +988,7 @@ class _CardRevealPageState extends State<CardRevealPage>
                     builder: (context, premium, prefs, _) {
                       final remaining =
                           SuggestionConstants.nearbyFreeLookupCount -
-                              prefs.nearbyFreeLookupsUsed;
+                          prefs.nearbyFreeLookupsUsed;
                       return FilledButton.tonalIcon(
                         onPressed: () => _showNearby(chosen),
                         icon: Icon(chosen.goOutCategory!.icon, size: 18),
@@ -1092,12 +1106,12 @@ class _CardRevealPageState extends State<CardRevealPage>
     final category = chosen.goOutCategory;
     if (category == null) return; // defensive — UI shouldn't allow this
 
-    final premiumService =
-        Provider.of<PremiumService>(context, listen: false);
+    final premiumService = Provider.of<PremiumService>(context, listen: false);
     final prefs = Provider.of<PreferencesModel>(context, listen: false);
     var consumeFreeLookup = false;
     if (!premiumService.isPremium) {
-      consumeFreeLookup = prefs.nearbyFreeLookupsUsed <
+      consumeFreeLookup =
+          prefs.nearbyFreeLookupsUsed <
           SuggestionConstants.nearbyFreeLookupCount;
       if (!consumeFreeLookup) {
         if (!await ensurePremium(context, featureName: 'Nearby places')) {
@@ -1130,11 +1144,7 @@ class _CardRevealPageState extends State<CardRevealPage>
     if (consumeFreeLookup) {
       unawaited(prefs.incrementNearbyLookups());
     }
-    await showNearbySheet(
-      context,
-      suggestion: chosen,
-      category: category,
-    );
+    await showNearbySheet(context, suggestion: chosen, category: category);
   }
 
   /// Share the chosen card as a deck-themed postcard image, with a
@@ -1146,8 +1156,7 @@ class _CardRevealPageState extends State<CardRevealPage>
     final activityType = ActivityType.values
         .where((e) => e.label == prefs.activityPreference)
         .firstOrNull;
-    final mood =
-        Mood.values.where((e) => e.label == prefs.mood).firstOrNull;
+    final mood = Mood.values.where((e) => e.label == prefs.mood).firstOrNull;
     final timeOfDay = TimeOfDayPref.values
         .where((e) => e.label == prefs.effectiveTimeOfDay)
         .firstOrNull;
@@ -1206,8 +1215,10 @@ class _CardRevealPageState extends State<CardRevealPage>
   /// — when the user has just looked at three results and might be
   /// thinking "none of these are quite right."
   void _showAddCardDialog() {
-    final suggestionsRepo =
-        Provider.of<SuggestionsRepository>(context, listen: false);
+    final suggestionsRepo = Provider.of<SuggestionsRepository>(
+      context,
+      listen: false,
+    );
     final textController = TextEditingController();
 
     showDialog(
@@ -1242,8 +1253,10 @@ class _CardRevealPageState extends State<CardRevealPage>
           ),
           FilledButton(
             onPressed: () async {
-              final premiumService =
-                  Provider.of<PremiumService>(context, listen: false);
+              final premiumService = Provider.of<PremiumService>(
+                context,
+                listen: false,
+              );
               final input = textController.text.trim();
               var result = suggestionsRepo.addCustomSuggestionChecked(
                 input,
@@ -1272,10 +1285,8 @@ class _CardRevealPageState extends State<CardRevealPage>
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(switch (result) {
-                    AddSuggestionResult.added =>
-                      'Added "$input" to your deck.',
-                    AddSuggestionResult.invalid =>
-                      'Type an activity first.',
+                    AddSuggestionResult.added => 'Added "$input" to your deck.',
+                    AddSuggestionResult.invalid => 'Type an activity first.',
                     AddSuggestionResult.duplicate =>
                       'That one is already in the deck.',
                     AddSuggestionResult.capReached =>
@@ -1307,10 +1318,7 @@ class _CardRevealPageState extends State<CardRevealPage>
             color: theme.colorScheme.onSurfaceVariant,
           ),
           const SizedBox(height: 12),
-          Text(
-            'No matching activities',
-            style: theme.textTheme.titleMedium,
-          ),
+          Text('No matching activities', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
             DealerVoice.emptyPool,
@@ -1337,11 +1345,7 @@ class _CardRevealPageState extends State<CardRevealPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.tune,
-              size: 64,
-              color: theme.colorScheme.primary,
-            ),
+            Icon(Icons.tune, size: 64, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
             Text(
               'Tell us about your mood first',
@@ -1358,8 +1362,7 @@ class _CardRevealPageState extends State<CardRevealPage>
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
-              onPressed: () =>
-                  Navigator.pushNamed(context, '/questionnaire'),
+              onPressed: () => Navigator.pushNamed(context, '/questionnaire'),
               icon: const Icon(Icons.arrow_forward),
               label: const Text('Get started'),
             ),
@@ -1376,7 +1379,8 @@ class _CardRevealPageState extends State<CardRevealPage>
   /// prompt before. Dismiss persists, so the banner only ever
   /// appears once per install.
   Widget _buildInterestsPrompt(ThemeData theme, PreferencesModel prefs) {
-    final shouldShow = prefs.firstDealCompleted &&
+    final shouldShow =
+        prefs.firstDealCompleted &&
         prefs.userInterests.isEmpty &&
         !prefs.interestsPromptDismissed;
     if (!shouldShow) return const SizedBox.shrink();
@@ -1448,7 +1452,8 @@ class _CardRevealPageState extends State<CardRevealPage>
   /// yet), pulses during considering, and stays visible-but-quiet
   /// during dealing/settled as a context anchor for the result.
   Widget _buildThinkingChainSlot(PreferencesModel prefs) {
-    final showChain = _stage == _RevealStage.considering ||
+    final showChain =
+        _stage == _RevealStage.considering ||
         _stage == _RevealStage.dealing ||
         _stage == _RevealStage.settled;
     final pulsing = _stage == _RevealStage.considering;
@@ -1478,14 +1483,8 @@ class _CardRevealPageState extends State<CardRevealPage>
         icon: _activityIcon(prefs.activityPreference),
         label: prefs.activityPreference ?? '',
       ),
-      _ThinkingItem(
-        icon: _moodIcon(prefs.mood),
-        label: prefs.mood ?? '',
-      ),
-      _ThinkingItem(
-        icon: _energyIcon(prefs.energyLevel),
-        label: 'Energy',
-      ),
+      _ThinkingItem(icon: _moodIcon(prefs.mood), label: prefs.mood ?? ''),
+      _ThinkingItem(icon: _energyIcon(prefs.energyLevel), label: 'Energy'),
       _ThinkingItem(
         icon: _timeIcon(prefs.effectiveTimeOfDay),
         label: prefs.effectiveTimeOfDay,
@@ -1496,23 +1495,29 @@ class _CardRevealPageState extends State<CardRevealPage>
     // there's actual data to show. We read with listen: false because
     // the parent build method already subscribes to WeatherService.
     if (prefs.useWeather) {
-      final weather =
-          Provider.of<WeatherService>(context, listen: false).currentWeather;
+      final weather = Provider.of<WeatherService>(
+        context,
+        listen: false,
+      ).currentWeather;
       if (weather != null) {
-        items.add(_ThinkingItem(
-          icon: _weatherIcon(weather),
-          label: _weatherLabel(weather),
-        ));
+        items.add(
+          _ThinkingItem(
+            icon: _weatherIcon(weather),
+            label: _weatherLabel(weather),
+          ),
+        );
       }
     }
 
     if (prefs.userInterests.isNotEmpty) {
-      items.add(_ThinkingItem(
-        icon: Icons.interests,
-        label: prefs.userInterests.length == 1
-            ? '1 interest'
-            : '${prefs.userInterests.length} interests',
-      ));
+      items.add(
+        _ThinkingItem(
+          icon: Icons.interests,
+          label: prefs.userInterests.length == 1
+              ? '1 interest'
+              : '${prefs.userInterests.length} interests',
+        ),
+      );
     }
 
     return items;
@@ -1668,7 +1673,10 @@ class _ThinkingChainState extends State<_ThinkingChain>
   Widget build(BuildContext context) {
     return Center(
       child: AnimatedBuilder(
-        animation: Listenable.merge([widget.revealController, _pulseController]),
+        animation: Listenable.merge([
+          widget.revealController,
+          _pulseController,
+        ]),
         builder: (context, _) {
           final children = <Widget>[];
           for (var i = 0; i < widget.items.length; i++) {
@@ -1709,24 +1717,29 @@ class _ThinkingChainState extends State<_ThinkingChain>
       opacity: opacity,
       child: Transform.scale(
         scale: scale,
-        child: Tooltip(
-          message: item.label,
-          waitDuration: const Duration(milliseconds: 500),
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: theme.colorScheme.primaryContainer,
-              border: Border.all(
-                color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                width: 1,
+        // Semantics as well as Tooltip: tooltips are hover/long-press
+        // only, invisible to screen readers.
+        child: Semantics(
+          label: item.label,
+          child: Tooltip(
+            message: item.label,
+            waitDuration: const Duration(milliseconds: 500),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.primaryContainer,
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                  width: 1,
+                ),
               ),
-            ),
-            child: Icon(
-              item.icon,
-              size: 20,
-              color: theme.colorScheme.onPrimaryContainer,
+              child: Icon(
+                item.icon,
+                size: 20,
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
             ),
           ),
         ),
@@ -1835,8 +1848,7 @@ class _IdleDeckStackState extends State<_IdleDeckStack>
     return AnimatedBuilder(
       animation: _breath,
       builder: (context, child) {
-        final scale =
-            1.0 + 0.02 * Curves.easeInOut.transform(_breath.value);
+        final scale = 1.0 + 0.02 * Curves.easeInOut.transform(_breath.value);
         return Transform.scale(scale: scale, child: child);
       },
       child: Stack(
@@ -1865,10 +1877,7 @@ class _CelebrationBurstPainter extends CustomPainter {
   final double progress;
   final Color color;
 
-  const _CelebrationBurstPainter({
-    required this.progress,
-    required this.color,
-  });
+  const _CelebrationBurstPainter({required this.progress, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1880,8 +1889,8 @@ class _CelebrationBurstPainter extends CustomPainter {
 
     for (var i = 0; i < 14; i++) {
       final angle = i * 2 * math.pi / 14 + (i.isEven ? 0.15 : -0.1);
-      final distance = maxRadius * (0.35 + 0.65 * eased) *
-          (i % 3 == 0 ? 1.0 : 0.75);
+      final distance =
+          maxRadius * (0.35 + 0.65 * eased) * (i % 3 == 0 ? 1.0 : 0.75);
       final pos = center + Offset.fromDirection(angle, distance);
       final particleSize = (i % 3 == 0 ? 4.5 : 2.8) * (1 - 0.4 * eased);
       canvas.drawCircle(pos, particleSize, paint);
