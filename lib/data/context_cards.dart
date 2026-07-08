@@ -265,7 +265,7 @@ const List<Suggestion> heatwaveCards = [
     iconName: 'cake',
     activityType: ActivityType.indoor,
     moods: [Mood.creative],
-    social: [SocialContext.solo, SocialContext.partner, SocialContext.smallGroup],
+    social: [SocialContext.solo, SocialContext.partner],
     energyLevel: 2.0,
     durationMinutes: 30,
     weather: WeatherTolerance.indoorOnly,
