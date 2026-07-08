@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/catalog_packs.dart';
 import '../data/suggestions_catalog.dart';
 import '../utils/constants.dart';
 import 'feedback_model.dart';
@@ -61,7 +62,11 @@ class SuggestionsRepository extends ChangeNotifier {
   /// (see `MigrationService`).
   List<Suggestion> customSuggestions = [];
 
-  SuggestionsRepository(this._prefs);
+  /// Injectable clock so seasonal-window composition is testable.
+  final DateTime Function() _clock;
+
+  SuggestionsRepository(this._prefs, {DateTime Function()? clock})
+      : _clock = clock ?? DateTime.now;
 
   /// Load custom suggestions from SharedPreferences.
   ///
@@ -92,28 +97,43 @@ class SuggestionsRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The shipped catalog (immutable view).
-  List<Suggestion> get catalog => List.unmodifiable(defaultSuggestions);
+  /// The catalog dealable *right now*: the shipped base catalog, the
+  /// always-on context packs (weather-positive + late-night), and
+  /// whichever seasonal packs are inside their date window today.
+  List<Suggestion> get catalog => List.unmodifiable([
+        ...defaultSuggestions,
+        ...contextPackCards,
+        ...seasonalCardsFor(_clock()),
+      ]);
+
+  /// Every shipped suggestion regardless of season — id resolution
+  /// must work year-round (history/favorites render out-of-window
+  /// cards).
+  static final List<Suggestion> _allShipped = List.unmodifiable([
+    ...defaultSuggestions,
+    ...allPackCards,
+  ]);
 
   /// Convenience: the titles of custom suggestions, in storage order.
   List<String> get customSuggestionTitles =>
       customSuggestions.map((s) => s.title).toList();
 
-  /// Look up a catalog suggestion by stable id. Returns `null` if not found.
+  /// Look up a shipped suggestion by stable id (base catalog or any
+  /// pack, in or out of season). Returns `null` if not found.
   Suggestion? suggestionById(String id) {
-    for (final s in defaultSuggestions) {
+    for (final s in _allShipped) {
       if (s.id == id) return s;
     }
     return null;
   }
 
-  /// Look up a catalog suggestion by display title (case-insensitive).
+  /// Look up a shipped suggestion by display title (case-insensitive).
   ///
-  /// Searches **catalog only** — for a search across both catalog and
-  /// the user's custom list, use [findByTitle].
+  /// Searches shipped content only — for a search across both catalog
+  /// and the user's custom list, use [findByTitle].
   Suggestion? suggestionByTitle(String title) {
     final lower = title.toLowerCase();
-    for (final s in defaultSuggestions) {
+    for (final s in _allShipped) {
       if (s.title.toLowerCase() == lower) return s;
     }
     return null;
@@ -187,6 +207,9 @@ class SuggestionsRepository extends ChangeNotifier {
   AddSuggestionResult addCustomSuggestionChecked(
     String suggestion, {
     int maxCount = SuggestionConstants.customSuggestionMaxCount,
+    ActivityType? activityType,
+    double? energyLevel,
+    int? durationMinutes,
   }) {
     final trimmed = suggestion.trim();
     if (trimmed.isEmpty) return AddSuggestionResult.invalid;
@@ -205,11 +228,17 @@ class SuggestionsRepository extends ChangeNotifier {
     }
 
     final usedIds = <String>{
-      ...defaultSuggestions.map((s) => s.id),
+      ..._allShipped.map((s) => s.id),
       ...customSuggestions.map((s) => s.id),
     };
     final id = _customIdFor(trimmed, usedIds);
-    customSuggestions.add(_buildCustom(trimmed, id));
+    customSuggestions.add(_buildCustom(
+      trimmed,
+      id,
+      activityType: activityType,
+      energyLevel: energyLevel,
+      durationMinutes: durationMinutes,
+    ));
     saveCustomSuggestions();
     return AddSuggestionResult.added;
   }
@@ -405,23 +434,36 @@ class SuggestionsRepository extends ChangeNotifier {
       final weirdAffinity =
           (1.0 - (s.weirdness - weirdnessTolerance).abs()).clamp(0.0, 1.0);
       final interestAffinity = _interestAffinity(userInterestSet, s);
+      final weatherAffinity = _weatherAffinity(s, weather);
       scored.add(_ScoredSuggestion(
         s,
-        energyScore * fbWeight * weirdAffinity * interestAffinity,
+        energyScore *
+            fbWeight *
+            weirdAffinity *
+            interestAffinity *
+            weatherAffinity,
       ));
     }
 
-    // Stage 5: inject the user's custom suggestions verbatim.
+    // Stage 5: inject the user's custom suggestions.
     if (includeCustom) {
       for (final s in customSuggestions) {
-        // Custom suggestions are permissive by construction, but still
-        // honor explicit dislike feedback if present.
+        // Custom suggestions are permissive by default, but honor the
+        // details a user set in the editor: a non-hybrid activity type
+        // respects the environment ask, and energy proximity biases
+        // the score (floored generously so user-added cards keep
+        // surfacing regardless of weirdness tolerance).
         if (feedback != null && feedback.getActivityWeight(s.id) <= 0.0) {
           continue;
         }
-        // Custom entries get a generous score so user-added stuff
-        // surfaces regardless of weirdness tolerance.
-        scored.add(_ScoredSuggestion(s, 1.0));
+        if (s.activityType != ActivityType.hybrid &&
+            activityType != ActivityType.hybrid &&
+            s.activityType != activityType) {
+          continue;
+        }
+        final delta = (s.energyLevel - energyLevel).abs();
+        final score = (1.0 - delta / 4.0).clamp(0.6, 1.0);
+        scored.add(_ScoredSuggestion(s, score));
       }
     }
 
@@ -501,6 +543,28 @@ class SuggestionsRepository extends ChangeNotifier {
   // ──────────────────────────────────────────────────────────────
   // Helpers
   // ──────────────────────────────────────────────────────────────
+
+  /// Weather-affinity multiplier for stage 4 scoring.
+  ///
+  /// The context packs carry weather-positive tags ('rainy-day',
+  /// 'snow-day', 'heatwave'): cards that *celebrate* the conditions
+  /// instead of merely tolerating them. With live weather known, a
+  /// matching card gets a strong boost (rain makes rain cards the
+  /// point) and a mismatched one a strong penalty ("walk in the rain
+  /// on purpose" shouldn't deal on a sunny day). Without weather data
+  /// the term collapses to 1.0 and the cards compete normally.
+  double _weatherAffinity(Suggestion s, WeatherData? weather) {
+    const weatherTags = ['rainy-day', 'snow-day', 'heatwave'];
+    final tag = s.tags.where(weatherTags.contains).firstOrNull;
+    if (tag == null || weather == null) return 1.0;
+    final matches = switch (tag) {
+      'rainy-day' => weather.isRainy,
+      'snow-day' => weather.isSnowy,
+      'heatwave' => weather.isHot,
+      _ => false,
+    };
+    return matches ? 1.5 : 0.5;
+  }
 
   /// Interest-affinity multiplier for stage 4 scoring.
   ///
@@ -596,14 +660,22 @@ class SuggestionsRepository extends ChangeNotifier {
     return '$base-$i';
   }
 
-  /// Build a new custom [Suggestion] with permissive defaults.
-  Suggestion _buildCustom(String title, String id) {
+  /// Build a new custom [Suggestion]. Defaults stay permissive so a
+  /// bare-title quick-add survives every filter; the optional detail
+  /// editor narrows type/energy/duration when the user cares.
+  Suggestion _buildCustom(
+    String title,
+    String id, {
+    ActivityType? activityType,
+    double? energyLevel,
+    int? durationMinutes,
+  }) {
     return Suggestion(
       id: id,
       title: title,
       description: '',
       iconName: 'local_activity_outlined',
-      activityType: ActivityType.hybrid,
+      activityType: activityType ?? ActivityType.hybrid,
       moods: const [Mood.relaxed, Mood.productive, Mood.creative, Mood.social],
       social: const [
         SocialContext.solo,
@@ -612,8 +684,9 @@ class SuggestionsRepository extends ChangeNotifier {
         SocialContext.largeGroup,
       ],
       timeOfDay: const [],
-      energyLevel: SuggestionConstants.energyLevelDefault,
-      durationMinutes: 30,
+      energyLevel: (energyLevel ?? SuggestionConstants.energyLevelDefault)
+          .clamp(1.0, 5.0),
+      durationMinutes: durationMinutes ?? 30,
       weather: WeatherTolerance.any,
       tags: const ['custom'],
       isCustom: true,

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/preferences_model.dart';
+import '../models/suggestion.dart';
 import '../models/suggestions_repository.dart';
 import '../models/activity_history_model.dart';
 import '../models/preference_profile.dart';
 import '../services/premium_service.dart';
 import '../widgets/paywall_sheet.dart';
 import '../widgets/save_profile_dialog.dart';
+import 'catalog_browser_page.dart';
 import 'questionnaire_page.dart';
 import 'settings_page.dart';
 import '../utils/constants.dart';
@@ -61,6 +63,33 @@ class ProfilePage extends StatelessWidget {
           
           const SizedBox(height: 24),
           
+          // The deck itself
+          Text(
+            'The Deck',
+            style: theme.textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: Icon(Icons.style, color: theme.colorScheme.primary),
+              title: const Text('Browse the Deck'),
+              subtitle: const Text(
+                'See every card — heart the ones you like, ban the rest',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CatalogBrowserPage(),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
           // Custom suggestions section
           Text(
             'Your Custom Suggestions',
@@ -521,86 +550,139 @@ class ProfilePage extends StatelessWidget {
   void _showAddCustomSuggestionDialog(BuildContext context) {
     final suggestionsRepo = Provider.of<SuggestionsRepository>(context, listen: false);
     final textController = TextEditingController();
+    // Optional details — a bare title keeps the permissive defaults.
+    ActivityType cardType = ActivityType.hybrid;
+    double cardEnergy = SuggestionConstants.energyLevelDefault;
 
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Add Custom Suggestion'),
-        content: TextField(
-          controller: textController,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Activity',
-            hintText: 'Enter your custom activity',
-            border: OutlineInputBorder(),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Add Custom Suggestion'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: textController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Activity',
+                    hintText: 'Enter your custom activity',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLength: SuggestionConstants.customSuggestionMaxLength,
+                ),
+                const SizedBox(height: 4),
+                // Quick details so 'go bouldering' stops surfacing on
+                // relaxed indoor low-energy asks. Hybrid = anywhere.
+                SegmentedButton<ActivityType>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ActivityType.indoor,
+                      label: Text('Indoor'),
+                    ),
+                    ButtonSegment(
+                      value: ActivityType.hybrid,
+                      label: Text('Anywhere'),
+                    ),
+                    ButtonSegment(
+                      value: ActivityType.outdoor,
+                      label: Text('Outdoor'),
+                    ),
+                  ],
+                  selected: {cardType},
+                  onSelectionChanged: (selection) => setDialogState(
+                    () => cardType = selection.first,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Energy: ${cardEnergy.toStringAsFixed(1)}',
+                  style: Theme.of(dialogContext).textTheme.bodySmall,
+                ),
+                Slider(
+                  value: cardEnergy,
+                  min: SuggestionConstants.energyLevelMin,
+                  max: SuggestionConstants.energyLevelMax,
+                  divisions: 8,
+                  onChanged: (v) => setDialogState(() => cardEnergy = v),
+                ),
+              ],
+            ),
           ),
-          maxLength: SuggestionConstants.customSuggestionMaxLength,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-            },
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final premiumService =
-                  Provider.of<PremiumService>(context, listen: false);
-              final input = textController.text;
-              var result = suggestionsRepo.addCustomSuggestionChecked(
-                input,
-                maxCount: premiumService.isPremium
-                    ? SuggestionConstants.customSuggestionMaxCount
-                    : SuggestionConstants.customSuggestionFreeMaxCount,
-              );
-              if (result == AddSuggestionResult.added) {
+          actions: [
+            TextButton(
+              onPressed: () {
                 Navigator.pop(dialogContext);
-                return;
-              }
-              if (result == AddSuggestionResult.capReached &&
-                  !premiumService.isPremium) {
-                // Free deck is full — show the paywall, and if they
-                // upgrade right here, finish what they came to do.
-                Navigator.pop(dialogContext);
-                await showPaywall(
-                  context,
-                  featureName: 'Unlimited custom cards',
-                );
-                if (!premiumService.isPremium) return;
-                result = suggestionsRepo.addCustomSuggestionChecked(
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final premiumService =
+                    Provider.of<PremiumService>(context, listen: false);
+                final input = textController.text;
+                var result = suggestionsRepo.addCustomSuggestionChecked(
                   input,
-                  maxCount: SuggestionConstants.customSuggestionMaxCount,
+                  maxCount: premiumService.isPremium
+                      ? SuggestionConstants.customSuggestionMaxCount
+                      : SuggestionConstants.customSuggestionFreeMaxCount,
+                  activityType: cardType,
+                  energyLevel: cardEnergy,
                 );
-                if (!context.mounted) return;
+                if (result == AddSuggestionResult.added) {
+                  Navigator.pop(dialogContext);
+                  return;
+                }
+                if (result == AddSuggestionResult.capReached &&
+                    !premiumService.isPremium) {
+                  // Free deck is full — show the paywall, and if they
+                  // upgrade right here, finish what they came to do.
+                  Navigator.pop(dialogContext);
+                  await showPaywall(
+                    context,
+                    featureName: 'Unlimited custom cards',
+                  );
+                  if (!premiumService.isPremium) return;
+                  result = suggestionsRepo.addCustomSuggestionChecked(
+                    input,
+                    maxCount: SuggestionConstants.customSuggestionMaxCount,
+                    activityType: cardType,
+                    energyLevel: cardEnergy,
+                  );
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        result == AddSuggestionResult.added
+                            ? 'Added "${input.trim()}" to your deck.'
+                            : 'Couldn’t add "${input.trim()}".',
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(
-                      result == AddSuggestionResult.added
-                          ? 'Added "${input.trim()}" to your deck.'
-                          : 'Couldn’t add "${input.trim()}".',
-                    ),
+                    content: Text(switch (result) {
+                      AddSuggestionResult.invalid =>
+                        'Type an activity first.',
+                      AddSuggestionResult.duplicate =>
+                        'That one is already in the deck.',
+                      _ => 'Your custom deck is full '
+                          '(${SuggestionConstants.customSuggestionMaxCount} cards).',
+                    }),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
-                return;
-              }
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(switch (result) {
-                    AddSuggestionResult.invalid => 'Type an activity first.',
-                    AddSuggestionResult.duplicate =>
-                      'That one is already in the deck.',
-                    _ => 'Your custom deck is full '
-                        '(${SuggestionConstants.customSuggestionMaxCount} cards).',
-                  }),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            child: const Text('Add'),
-          ),
-        ],
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
       ),
     );
   }

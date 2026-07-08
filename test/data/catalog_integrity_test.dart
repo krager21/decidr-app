@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:decidr_app/data/catalog_packs.dart';
 import 'package:decidr_app/data/suggestions_catalog.dart';
 import 'package:decidr_app/models/suggestion.dart';
+
+/// The full shipped content surface: base catalog + every pack,
+/// in-window or not. All invariants apply to all of it.
+final List<Suggestion> allShippedCards = [
+  ...defaultSuggestions,
+  ...allPackCards,
+];
 
 /// Catalog lint: the content lives in two hand-written Dart files
 /// (~480 entries), and every recent data bug — duplicate concepts,
@@ -13,14 +21,14 @@ void main() {
   test('every suggestion id is unique', () {
     final seen = <String>{};
     final dupes = <String>[];
-    for (final s in defaultSuggestions) {
+    for (final s in allShippedCards) {
       if (!seen.add(s.id)) dupes.add(s.id);
     }
     expect(dupes, isEmpty, reason: 'duplicate ids: $dupes');
   });
 
   test('numeric fields are within their documented ranges', () {
-    for (final s in defaultSuggestions) {
+    for (final s in allShippedCards) {
       expect(s.energyLevel, inInclusiveRange(1.0, 5.0),
           reason: '${s.id} energyLevel');
       expect(s.weirdness, inInclusiveRange(0.0, 1.0),
@@ -31,7 +39,7 @@ void main() {
   });
 
   test('no entry filters itself out: moods and social are non-empty', () {
-    for (final s in defaultSuggestions) {
+    for (final s in allShippedCards) {
       expect(s.moods, isNotEmpty, reason: '${s.id} has no moods');
       expect(s.social, isNotEmpty, reason: '${s.id} has no social contexts');
     }
@@ -39,7 +47,7 @@ void main() {
 
   test('no outdoor activity is indoorOnly (weather filter would starve it)',
       () {
-    final contradictions = defaultSuggestions
+    final contradictions = allShippedCards
         .where((s) =>
             s.activityType == ActivityType.outdoor &&
             s.weather == WeatherTolerance.indoorOnly)
@@ -51,7 +59,7 @@ void main() {
   });
 
   test('every iconName resolves to a real icon, not the fallback', () {
-    final broken = defaultSuggestions
+    final broken = allShippedCards
         .where((s) =>
             s.iconName != 'local_activity_outlined' &&
             s.iconData == Icons.local_activity_outlined)
@@ -64,7 +72,7 @@ void main() {
   test('interest tags use the canonical Interests taxonomy', () {
     final canonical = Interests.all.toSet();
     final unknown = <String>[];
-    for (final s in defaultSuggestions) {
+    for (final s in allShippedCards) {
       for (final i in s.interests) {
         if (!canonical.contains(i)) unknown.add('${s.id}: $i');
       }
@@ -88,7 +96,7 @@ void main() {
     }
 
     final byKey = <String, List<Suggestion>>{};
-    for (final s in defaultSuggestions) {
+    for (final s in allShippedCards) {
       final k = keyFor(s.title);
       if (k.isEmpty) continue;
       byKey.putIfAbsent(k, () => []).add(s);
