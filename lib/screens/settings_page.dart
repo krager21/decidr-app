@@ -6,6 +6,7 @@ import '../models/preferences_model.dart';
 import '../services/context_service.dart';
 import '../services/premium_service.dart';
 import '../services/purchases_gateway.dart';
+import '../services/reminder_service.dart';
 import '../services/weather_service.dart';
 import '../utils/constants.dart';
 import '../widgets/paywall_sheet.dart';
@@ -27,6 +28,10 @@ class SettingsPage extends StatelessWidget {
           _buildThemeSettings(context),
           const Divider(),
           _buildPersonalizationSettings(context),
+          if (ReminderService.isSupported) ...[
+            const Divider(),
+            _buildReminderSettings(context),
+          ],
           const Divider(),
           _buildPremiumSettings(context),
           const Divider(),
@@ -286,6 +291,82 @@ class SettingsPage extends StatelessWidget {
       default:
         break; // dismissed
     }
+  }
+
+  /// Opt-in daily deal reminder: a local notification at a user-chosen
+  /// time. Only rendered on platforms with local notifications.
+  Widget _buildReminderSettings(BuildContext context) {
+    final theme = Theme.of(context);
+    final prefs = Provider.of<PreferencesModel>(context);
+    final reminders = Provider.of<ReminderService>(context, listen: false);
+    final time = TimeOfDay(
+      hour: prefs.dailyReminderMinutes ~/ 60,
+      minute: prefs.dailyReminderMinutes % 60,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            'Reminders',
+            style: theme.textTheme.titleLarge,
+          ),
+        ),
+        SwitchListTile(
+          title: const Text('Daily deal reminder'),
+          subtitle: Text(
+            prefs.dailyReminderEnabled
+                ? 'Every day at ${time.format(context)}'
+                : 'A nudge to deal your cards, once a day',
+          ),
+          secondary: const Icon(Icons.notifications_active_outlined),
+          value: prefs.dailyReminderEnabled,
+          onChanged: (value) async {
+            if (value) {
+              final granted = await reminders.requestPermission();
+              if (!context.mounted) return;
+              if (!granted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Notifications are off for Decidr — enable them '
+                      'in system settings first.',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+              await prefs.setDailyReminder(enabled: true);
+              await reminders.scheduleDailyReminder(time);
+            } else {
+              await prefs.setDailyReminder(enabled: false);
+              await reminders.cancelDailyReminder();
+            }
+          },
+        ),
+        if (prefs.dailyReminderEnabled)
+          ListTile(
+            leading: const Icon(Icons.schedule),
+            title: const Text('Reminder time'),
+            subtitle: Text(time.format(context)),
+            onTap: () async {
+              final picked = await showTimePicker(
+                context: context,
+                initialTime: time,
+              );
+              if (picked == null || !context.mounted) return;
+              await prefs.setDailyReminder(
+                enabled: true,
+                minutes: picked.hour * 60 + picked.minute,
+              );
+              await reminders.scheduleDailyReminder(picked);
+            },
+          ),
+      ],
+    );
   }
 
   /// Premium status + purchase entry points. The paywall itself

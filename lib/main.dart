@@ -13,6 +13,7 @@ import 'models/feedback_model.dart';
 import 'services/migration_service.dart';
 import 'services/places_service.dart';
 import 'services/premium_service.dart';
+import 'services/reminder_service.dart';
 import 'services/weather_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/settings_page.dart';
@@ -95,6 +96,31 @@ Future<void> _bootstrap() async {
     }
   });
 
+  // Reminders (local notifications). init() no-ops on web; failures
+  // degrade to a notification-free app. The lapse-rescue slot is
+  // re-armed ~6 days out on every launch — it only fires for a user
+  // who stops opening the app — personalized with a favorite when one
+  // exists. The daily slot is re-asserted too (survives reboots).
+  final reminderService = ReminderService();
+  unawaited(reminderService.init().then((_) async {
+    String? hook;
+    if (preferencesModel.favoriteActivities.isNotEmpty) {
+      final favs = preferencesModel.favoriteActivities;
+      final pick = favs[DateTime.now().day % favs.length];
+      final resolved = suggestionsRepo.resolveById(pick);
+      if (!resolved.isCustom || resolved.title != pick) {
+        hook = resolved.title;
+      }
+    }
+    await reminderService.rescheduleLapseRescue(hookTitle: hook);
+    if (preferencesModel.dailyReminderEnabled) {
+      final m = preferencesModel.dailyReminderMinutes;
+      await reminderService.scheduleDailyReminder(
+        TimeOfDay(hour: m ~/ 60, minute: m % 60),
+      );
+    }
+  }));
+
   runApp(
     MultiProvider(
       providers: [
@@ -105,6 +131,7 @@ Future<void> _bootstrap() async {
         ChangeNotifierProvider(create: (_) => weatherService),
         ChangeNotifierProvider(create: (_) => PlacesService()),
         ChangeNotifierProvider(create: (_) => premiumService),
+        Provider<ReminderService>.value(value: reminderService),
       ],
       child: const DecidrApp(),
     ),

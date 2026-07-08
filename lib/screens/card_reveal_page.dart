@@ -13,6 +13,7 @@ import '../models/suggestion.dart';
 import '../models/suggestions_repository.dart';
 import '../models/weather_model.dart';
 import '../services/premium_service.dart';
+import '../services/reminder_service.dart';
 import '../services/weather_service.dart';
 import '../utils/constants.dart';
 import '../widgets/decision_card.dart';
@@ -698,6 +699,7 @@ class _CardRevealPageState extends State<CardRevealPage>
       key: const ValueKey('idle'),
       mainAxisSize: MainAxisSize.min,
       children: [
+        _buildPendingReminderPrompt(theme),
         Text(
           'We\'ll deal three cards. The middle one is yours.',
           style: theme.textTheme.bodyMedium?.copyWith(
@@ -716,6 +718,73 @@ class _CardRevealPageState extends State<CardRevealPage>
           ),
         ),
       ],
+    );
+  }
+
+  /// "Did you end up doing X?" — resolves a pending Remind-me-tonight
+  /// follow-up in-app, which works identically on every platform
+  /// (no notification-action isolates needed).
+  Widget _buildPendingReminderPrompt(ThemeData theme) {
+    return Consumer<PreferencesModel>(
+      builder: (context, prefs, _) {
+        final pendingId = prefs.pendingReminderId;
+        if (pendingId == null) return const SizedBox.shrink();
+        final repo =
+            Provider.of<SuggestionsRepository>(context, listen: false);
+        final suggestion = repo.resolveById(pendingId);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Material(
+            color: theme.colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Did you end up doing '
+                    '“${suggestion.title}”?',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => prefs.setPendingReminder(null),
+                        child: const Text('Not this time'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          Provider.of<ActivityHistoryModel>(
+                            context,
+                            listen: false,
+                          ).recordActivity(pendingId);
+                          prefs.setPendingReminder(null);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Nice — "${suggestion.title}" added to '
+                                'history.',
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.check, size: 18),
+                        label: const Text('Did it!'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -897,6 +966,15 @@ class _CardRevealPageState extends State<CardRevealPage>
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add your own'),
             ),
+            // Leaving to actually do the activity used to mean the app
+            // forgot everything — this closes the loop with a gentle
+            // evening follow-up resolved in-app on next open.
+            if (ReminderService.isSupported)
+              TextButton.icon(
+                onPressed: () => _remindTonight(chosen),
+                icon: const Icon(Icons.notifications_none, size: 18),
+                label: const Text('Remind me tonight'),
+              ),
             // Note: the Nearby button used to live here too, but has
             // been promoted into the chosen-card container above for
             // visibility. Cards without a goOutCategory have nothing
@@ -960,6 +1038,37 @@ class _CardRevealPageState extends State<CardRevealPage>
       context,
       suggestion: chosen,
       category: category,
+    );
+  }
+
+  /// Schedule tonight's follow-up notification for [chosen] and stash
+  /// its id so the Decide tab can ask "did you do it?" on next open.
+  Future<void> _remindTonight(Suggestion chosen) async {
+    final reminders = Provider.of<ReminderService>(context, listen: false);
+    final prefs = Provider.of<PreferencesModel>(context, listen: false);
+    final granted = await reminders.requestPermission();
+    if (!mounted) return;
+    if (!granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Notifications are off for Decidr — enable them in system '
+            'settings first.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    await reminders.scheduleTonightReminder(chosen.title);
+    await prefs.setPendingReminder(chosen.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('We’ll check in tonight about "${chosen.title}".'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 

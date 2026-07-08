@@ -170,6 +170,41 @@ class PreferencesModel extends ChangeNotifier {
   /// against `SuggestionConstants.nearbyFreeLookupCount` by the gate.
   int nearbyFreeLookupsUsed = 0;
 
+  /// Whether the opt-in daily deal reminder is on.
+  bool dailyReminderEnabled = false;
+
+  /// Daily reminder time as minutes past midnight (default 19:00).
+  int dailyReminderMinutes = 19 * 60;
+
+  /// Suggestion id awaiting a "did you do it?" follow-up — set by
+  /// "Remind me tonight" on the settled card, cleared when the user
+  /// resolves the prompt on the Decide tab.
+  String? pendingReminderId;
+
+  /// Persist the daily reminder settings. Scheduling itself lives in
+  /// ReminderService; this only records the preference.
+  Future<void> setDailyReminder({
+    required bool enabled,
+    int? minutes,
+  }) async {
+    dailyReminderEnabled = enabled;
+    if (minutes != null) dailyReminderMinutes = minutes;
+    notifyListeners();
+    await _prefs.setBool('dailyReminderEnabled', dailyReminderEnabled);
+    await _prefs.setInt('dailyReminderMinutes', dailyReminderMinutes);
+  }
+
+  /// Set or clear the pending "did you do it?" suggestion.
+  Future<void> setPendingReminder(String? suggestionId) async {
+    pendingReminderId = suggestionId;
+    notifyListeners();
+    if (suggestionId == null) {
+      await _prefs.remove('pendingReminderId');
+    } else {
+      await _prefs.setString('pendingReminderId', suggestionId);
+    }
+  }
+
   /// Session-only deck override for the premium "try it for one deal"
   /// flow. Never persisted — cleared after the trial deal settles.
   String? previewDeckId;
@@ -263,6 +298,9 @@ class PreferencesModel extends ChangeNotifier {
     favoriteActivities = _prefs.getStringList('favoriteActivities') ?? [];
     savedProfiles = _decodeProfiles(_prefs.getString('savedProfiles'));
     nearbyFreeLookupsUsed = _prefs.getInt('nearbyFreeLookupsUsed') ?? 0;
+    dailyReminderEnabled = _prefs.getBool('dailyReminderEnabled') ?? false;
+    dailyReminderMinutes = _prefs.getInt('dailyReminderMinutes') ?? 19 * 60;
+    pendingReminderId = _prefs.getString('pendingReminderId');
     notifyListeners();
   }
 

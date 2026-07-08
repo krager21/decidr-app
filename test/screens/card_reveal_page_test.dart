@@ -10,6 +10,7 @@ import 'package:decidr_app/models/suggestions_repository.dart';
 import 'package:decidr_app/screens/card_reveal_page.dart';
 import 'package:decidr_app/services/places_service.dart';
 import 'package:decidr_app/services/premium_service.dart';
+import 'package:decidr_app/services/reminder_service.dart';
 import 'package:decidr_app/services/weather_service.dart';
 
 /// Widget tests for the deal → settle → act flow. This page is the
@@ -58,6 +59,7 @@ Future<
         ChangeNotifierProvider(
           create: (_) => PremiumService(storeAvailable: false),
         ),
+        Provider<ReminderService>(create: (_) => ReminderService()),
       ],
       child: const MaterialApp(home: CardRevealPage()),
     ),
