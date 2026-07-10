@@ -722,10 +722,13 @@ const List<Suggestion> _curatedSuggestions = [
     tags: ['games', 'connection'],
   ),
   Suggestion(
+    // Solo-tagged (remote connection activity) — the title must read
+    // sensibly when dealt to someone who said they're alone, so it
+    // leads with the text-relay framing rather than 'co-write'.
     id: 'co-write-story',
-    title: 'Co-write a story',
+    title: 'Start a story relay by text',
     description:
-        'One person writes a sentence, the next continues. Send back and forth. See where it goes.',
+        'Text a friend one sentence. They write the next. Send it back and forth and see where it goes.',
     iconName: 'create',
     activityType: ActivityType.indoor,
     moods: [Mood.social, Mood.creative],
